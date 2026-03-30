@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"os"
-	"strconv"
 
 	"github.com/spf13/cobra"
 	"github.com/schema-export/schema-export/internal/cli"
@@ -91,14 +90,4 @@ func newVersionCmd() *cobra.Command {
 	}
 }
 
-// parseInt 解析整数，出错时返回默认值
-func parseInt(s string, defaultVal int) int {
-	if s == "" {
-		return defaultVal
-	}
-	val, err := strconv.Atoi(s)
-	if err != nil {
-		return defaultVal
-	}
-	return val
-}
+

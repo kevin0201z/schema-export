@@ -4,7 +4,6 @@
 *.dll
 *.so
 *.dylib
-schema-export
 schema-export-*
 
 # Test binary, built with `go test -c`
@@ -35,7 +34,6 @@ Thumbs.db
 # Output directories and files
 output/
 docs/
-*.md
 *.sql
 
 # Log files

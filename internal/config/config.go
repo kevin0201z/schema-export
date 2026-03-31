@@ -5,6 +5,7 @@ import (
 	"net/url"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/schema-export/schema-export/internal/inspector"
@@ -64,9 +65,9 @@ func (c *Config) LoadFromEnv() {
 		c.Database.Host = v
 	}
 	if v := os.Getenv("DB_PORT"); v != "" {
-		var port int
-		fmt.Sscanf(v, "%d", &port)
-		c.Database.Port = port
+		if port, err := strconv.Atoi(v); err == nil {
+			c.Database.Port = port
+		}
 	}
 	if v := os.Getenv("DB_DATABASE"); v != "" {
 		c.Database.Database = v

@@ -53,7 +53,7 @@ func New(msg string) error {
 
 // Newf 使用格式化字符串创建新错误
 func Newf(format string, args ...interface{}) error {
-	return errors.New(fmt.Sprintf(format, args...))
+	return fmt.Errorf(format, args...)
 }
 
 // Is 检查错误是否匹配

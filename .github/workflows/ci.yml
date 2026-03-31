@@ -53,6 +53,7 @@ jobs:
       uses: golangci/golangci-lint-action@v3
       with:
         version: v1.59.0
+        install-mode: script
         args: --timeout 5m
 
   test:

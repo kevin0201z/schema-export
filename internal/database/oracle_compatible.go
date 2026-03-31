@@ -18,6 +18,133 @@ const (
 	PlaceholderColon                            // :1, :2 占位符 (Oracle)
 )
 
+// Oracle 兼容数据库 SQL 查询常量
+const (
+	// 表列表查询
+	queryTablesAllSQL = `
+		SELECT TABLE_NAME, COMMENTS 
+		FROM ALL_TAB_COMMENTS 
+		WHERE TABLE_TYPE = 'TABLE' AND OWNER = %s
+		ORDER BY TABLE_NAME
+	`
+	queryTablesUserSQL = `
+		SELECT TABLE_NAME, COMMENTS 
+		FROM USER_TAB_COMMENTS 
+		WHERE TABLE_TYPE = 'TABLE'
+		ORDER BY TABLE_NAME
+	`
+
+	// 字段查询
+	queryColumnsAllSQL = `
+		SELECT 
+			c.COLUMN_NAME,
+			c.DATA_TYPE,
+			c.DATA_LENGTH,
+			c.DATA_PRECISION,
+			c.DATA_SCALE,
+			c.NULLABLE,
+			c.DATA_DEFAULT,
+			cc.COMMENTS,
+			CASE WHEN pk.COLUMN_NAME IS NOT NULL THEN 1 ELSE 0 END as IS_PK
+		FROM ALL_TAB_COLUMNS c
+		LEFT JOIN ALL_COL_COMMENTS cc ON c.OWNER = cc.OWNER AND c.TABLE_NAME = cc.TABLE_NAME AND c.COLUMN_NAME = cc.COLUMN_NAME
+		LEFT JOIN (
+			SELECT col.COLUMN_NAME
+			FROM ALL_CONSTRAINTS cons
+			JOIN ALL_CONS_COLUMNS col ON cons.OWNER = col.OWNER AND cons.CONSTRAINT_NAME = col.CONSTRAINT_NAME
+			WHERE cons.TABLE_NAME = %s AND cons.OWNER = %s AND cons.CONSTRAINT_TYPE = 'P'
+		) pk ON c.COLUMN_NAME = pk.COLUMN_NAME
+		WHERE c.TABLE_NAME = %s AND c.OWNER = %s
+		ORDER BY c.COLUMN_ID
+	`
+	queryColumnsUserSQL = `
+		SELECT 
+			c.COLUMN_NAME,
+			c.DATA_TYPE,
+			c.DATA_LENGTH,
+			c.DATA_PRECISION,
+			c.DATA_SCALE,
+			c.NULLABLE,
+			c.DATA_DEFAULT,
+			cc.COMMENTS,
+			CASE WHEN pk.COLUMN_NAME IS NOT NULL THEN 1 ELSE 0 END as IS_PK
+		FROM USER_TAB_COLUMNS c
+		LEFT JOIN USER_COL_COMMENTS cc ON c.TABLE_NAME = cc.TABLE_NAME AND c.COLUMN_NAME = cc.COLUMN_NAME
+		LEFT JOIN (
+			SELECT col.COLUMN_NAME
+			FROM USER_CONSTRAINTS cons
+			JOIN USER_CONS_COLUMNS col ON cons.CONSTRAINT_NAME = col.CONSTRAINT_NAME
+			WHERE cons.TABLE_NAME = %s AND cons.CONSTRAINT_TYPE = 'P'
+		) pk ON c.COLUMN_NAME = pk.COLUMN_NAME
+		WHERE c.TABLE_NAME = %s
+		ORDER BY c.COLUMN_ID
+	`
+
+	// 索引查询
+	queryIndexesAllSQL = `
+		SELECT 
+			i.INDEX_NAME,
+			i.UNIQUENESS,
+			ic.COLUMN_NAME
+		FROM ALL_INDEXES i
+		JOIN ALL_IND_COLUMNS ic ON i.OWNER = ic.INDEX_OWNER AND i.INDEX_NAME = ic.INDEX_NAME
+		WHERE i.TABLE_NAME = %s AND i.OWNER = %s
+		ORDER BY i.INDEX_NAME, ic.COLUMN_POSITION
+	`
+	queryIndexesUserSQL = `
+		SELECT 
+			i.INDEX_NAME,
+			i.UNIQUENESS,
+			ic.COLUMN_NAME
+		FROM USER_INDEXES i
+		JOIN USER_IND_COLUMNS ic ON i.INDEX_NAME = ic.INDEX_NAME
+		WHERE i.TABLE_NAME = %s
+		ORDER BY i.INDEX_NAME, ic.COLUMN_POSITION
+	`
+	queryPKNameAllSQL = `
+		SELECT cons.CONSTRAINT_NAME
+		FROM ALL_CONSTRAINTS cons
+		WHERE cons.TABLE_NAME = %s AND cons.OWNER = %s AND cons.CONSTRAINT_TYPE = 'P'
+	`
+	queryPKNameUserSQL = `
+		SELECT cons.CONSTRAINT_NAME
+		FROM USER_CONSTRAINTS cons
+		WHERE cons.TABLE_NAME = %s AND cons.CONSTRAINT_TYPE = 'P'
+	`
+
+	// 外键查询
+	queryForeignKeysAllSQL = `
+		SELECT 
+			cons.CONSTRAINT_NAME,
+			col.COLUMN_NAME,
+			refCons.TABLE_NAME as REF_TABLE,
+			refCol.COLUMN_NAME as REF_COLUMN,
+			cons.DELETE_RULE
+		FROM ALL_CONSTRAINTS cons
+		JOIN ALL_CONS_COLUMNS col ON cons.OWNER = col.OWNER AND cons.CONSTRAINT_NAME = col.CONSTRAINT_NAME
+		JOIN ALL_CONSTRAINTS refCons ON cons.R_OWNER = refCons.OWNER AND cons.R_CONSTRAINT_NAME = refCons.CONSTRAINT_NAME
+		JOIN ALL_CONS_COLUMNS refCol ON refCons.OWNER = refCol.OWNER AND refCons.CONSTRAINT_NAME = refCol.CONSTRAINT_NAME AND col.POSITION = refCol.POSITION
+		WHERE cons.TABLE_NAME = %s AND cons.OWNER = %s AND cons.CONSTRAINT_TYPE = 'R'
+	`
+	queryForeignKeysUserSQL = `
+		SELECT 
+			cons.CONSTRAINT_NAME,
+			col.COLUMN_NAME,
+			refCons.TABLE_NAME as REF_TABLE,
+			refCol.COLUMN_NAME as REF_COLUMN,
+			cons.DELETE_RULE
+		FROM USER_CONSTRAINTS cons
+		JOIN USER_CONS_COLUMNS col ON cons.CONSTRAINT_NAME = col.CONSTRAINT_NAME
+		JOIN USER_CONSTRAINTS refCons ON cons.R_CONSTRAINT_NAME = refCons.CONSTRAINT_NAME
+		JOIN USER_CONS_COLUMNS refCol ON refCons.CONSTRAINT_NAME = refCol.CONSTRAINT_NAME AND col.POSITION = refCol.POSITION
+		WHERE cons.TABLE_NAME = %s AND cons.CONSTRAINT_TYPE = 'R'
+	`
+
+	// 表注释查询
+	queryTableCommentAllSQL   = `SELECT COMMENTS FROM ALL_TAB_COMMENTS WHERE TABLE_NAME = %s AND OWNER = %s`
+	queryTableCommentUserSQL  = `SELECT COMMENTS FROM USER_TAB_COMMENTS WHERE TABLE_NAME = %s`
+)
+
 // OracleCompatibleInspector Oracle 兼容数据库 Inspector 基础实现
 type OracleCompatibleInspector struct {
 	*BaseInspector
@@ -32,31 +159,84 @@ func NewOracleCompatibleInspector(config inspector.ConnectionConfig, placeholder
 	}
 }
 
-// QueryTablesInput 查询表输入参数
-type QueryTablesInput struct {
-	Schema string
+// GetTables 获取所有表列表（实现 inspector.Inspector 接口）
+func (o *OracleCompatibleInspector) GetTables(ctx context.Context) ([]model.Table, error) {
+	config := o.GetConfig()
+	return o.queryTables(ctx, config.Schema)
 }
 
-// QueryTables 查询表列表
-func (o *OracleCompatibleInspector) QueryTables(ctx context.Context, input QueryTablesInput) ([]model.Table, error) {
+// GetTable 获取单个表的完整元数据（实现 inspector.Inspector 接口）
+func (o *OracleCompatibleInspector) GetTable(ctx context.Context, tableName string) (*model.Table, error) {
+	config := o.GetConfig()
+	schema := config.Schema
+
+	table := &model.Table{
+		Name: tableName,
+		Type: model.TableTypeTable,
+	}
+
+	// 获取表注释
+	comment, _ := o.queryTableComment(ctx, tableName, schema)
+	table.Comment = comment
+
+	// 获取字段
+	columns, err := o.GetColumns(ctx, tableName)
+	if err != nil {
+		return nil, err
+	}
+	table.Columns = columns
+
+	// 获取索引
+	indexes, err := o.GetIndexes(ctx, tableName)
+	if err != nil {
+		return nil, err
+	}
+	table.Indexes = indexes
+
+	// 获取外键
+	foreignKeys, err := o.GetForeignKeys(ctx, tableName)
+	if err != nil {
+		return nil, err
+	}
+	table.ForeignKeys = foreignKeys
+
+	return table, nil
+}
+
+// GetColumns 获取表字段列表（实现 inspector.Inspector 接口）
+func (o *OracleCompatibleInspector) GetColumns(ctx context.Context, tableName string) ([]model.Column, error) {
+	config := o.GetConfig()
+	return o.queryColumns(ctx, tableName, config.Schema)
+}
+
+// GetIndexes 获取表索引列表（实现 inspector.Inspector 接口）
+func (o *OracleCompatibleInspector) GetIndexes(ctx context.Context, tableName string) ([]model.Index, error) {
+	config := o.GetConfig()
+	return o.queryIndexes(ctx, tableName, config.Schema)
+}
+
+// GetForeignKeys 获取表外键列表（实现 inspector.Inspector 接口）
+func (o *OracleCompatibleInspector) GetForeignKeys(ctx context.Context, tableName string) ([]model.ForeignKey, error) {
+	config := o.GetConfig()
+	return o.queryForeignKeys(ctx, tableName, config.Schema)
+}
+
+// QueryInput 通用查询输入参数
+type QueryInput struct {
+	TableName string // 可选，表名
+	Schema    string // 可选，Schema
+}
+
+// queryTables 查询表列表
+func (o *OracleCompatibleInspector) queryTables(ctx context.Context, schema string) ([]model.Table, error) {
 	var query string
 	var args []interface{}
 
-	if input.Schema != "" {
-		query = `
-			SELECT TABLE_NAME, COMMENTS 
-			FROM ALL_TAB_COMMENTS 
-			WHERE TABLE_TYPE = 'TABLE' AND OWNER = ` + o.placeholderStr(1) + `
-			ORDER BY TABLE_NAME
-		`
-		args = append(args, input.Schema)
+	if schema != "" {
+		query = fmt.Sprintf(queryTablesAllSQL, o.placeholderStr(1))
+		args = append(args, schema)
 	} else {
-		query = `
-			SELECT TABLE_NAME, COMMENTS 
-			FROM USER_TAB_COMMENTS 
-			WHERE TABLE_TYPE = 'TABLE'
-			ORDER BY TABLE_NAME
-		`
+		query = queryTablesUserSQL
 	}
 
 	rows, err := o.GetDB().QueryContext(ctx, query, args...)
@@ -82,65 +262,19 @@ func (o *OracleCompatibleInspector) QueryTables(ctx context.Context, input Query
 	return tables, rows.Err()
 }
 
-// QueryColumnsInput 查询字段输入参数
-type QueryColumnsInput struct {
-	TableName string
-	Schema    string
-}
-
-// QueryColumns 查询表字段
-func (o *OracleCompatibleInspector) QueryColumns(ctx context.Context, input QueryColumnsInput) ([]model.Column, error) {
+// queryColumns 查询表字段
+func (o *OracleCompatibleInspector) queryColumns(ctx context.Context, tableName, schema string) ([]model.Column, error) {
 	var query string
 	var args []interface{}
 
-	if input.Schema != "" {
-		query = `
-			SELECT 
-				c.COLUMN_NAME,
-				c.DATA_TYPE,
-				c.DATA_LENGTH,
-				c.DATA_PRECISION,
-				c.DATA_SCALE,
-				c.NULLABLE,
-				c.DATA_DEFAULT,
-				cc.COMMENTS,
-				CASE WHEN pk.COLUMN_NAME IS NOT NULL THEN 1 ELSE 0 END as IS_PK
-			FROM ALL_TAB_COLUMNS c
-			LEFT JOIN ALL_COL_COMMENTS cc ON c.OWNER = cc.OWNER AND c.TABLE_NAME = cc.TABLE_NAME AND c.COLUMN_NAME = cc.COLUMN_NAME
-			LEFT JOIN (
-				SELECT col.COLUMN_NAME
-				FROM ALL_CONSTRAINTS cons
-				JOIN ALL_CONS_COLUMNS col ON cons.OWNER = col.OWNER AND cons.CONSTRAINT_NAME = col.CONSTRAINT_NAME
-				WHERE cons.TABLE_NAME = ` + o.placeholderStr(1) + ` AND cons.OWNER = ` + o.placeholderStr(2) + ` AND cons.CONSTRAINT_TYPE = 'P'
-			) pk ON c.COLUMN_NAME = pk.COLUMN_NAME
-			WHERE c.TABLE_NAME = ` + o.placeholderStr(3) + ` AND c.OWNER = ` + o.placeholderStr(4) + `
-			ORDER BY c.COLUMN_ID
-		`
-		args = append(args, input.TableName, input.Schema, input.TableName, input.Schema)
+	if schema != "" {
+		query = fmt.Sprintf(queryColumnsAllSQL,
+			o.placeholderStr(1), o.placeholderStr(2),
+			o.placeholderStr(3), o.placeholderStr(4))
+		args = append(args, tableName, schema, tableName, schema)
 	} else {
-		query = `
-			SELECT 
-				c.COLUMN_NAME,
-				c.DATA_TYPE,
-				c.DATA_LENGTH,
-				c.DATA_PRECISION,
-				c.DATA_SCALE,
-				c.NULLABLE,
-				c.DATA_DEFAULT,
-				cc.COMMENTS,
-				CASE WHEN pk.COLUMN_NAME IS NOT NULL THEN 1 ELSE 0 END as IS_PK
-			FROM USER_TAB_COLUMNS c
-			LEFT JOIN USER_COL_COMMENTS cc ON c.TABLE_NAME = cc.TABLE_NAME AND c.COLUMN_NAME = cc.COLUMN_NAME
-			LEFT JOIN (
-				SELECT col.COLUMN_NAME
-				FROM USER_CONSTRAINTS cons
-				JOIN USER_CONS_COLUMNS col ON cons.CONSTRAINT_NAME = col.CONSTRAINT_NAME
-				WHERE cons.TABLE_NAME = ` + o.placeholderStr(1) + ` AND cons.CONSTRAINT_TYPE = 'P'
-			) pk ON c.COLUMN_NAME = pk.COLUMN_NAME
-			WHERE c.TABLE_NAME = ` + o.placeholderStr(2) + `
-			ORDER BY c.COLUMN_ID
-		`
-		args = append(args, input.TableName, input.TableName)
+		query = fmt.Sprintf(queryColumnsUserSQL, o.placeholderStr(1), o.placeholderStr(2))
+		args = append(args, tableName, tableName)
 	}
 
 	rows, err := o.GetDB().QueryContext(ctx, query, args...)
@@ -193,41 +327,17 @@ func (o *OracleCompatibleInspector) QueryColumns(ctx context.Context, input Quer
 	return columns, rows.Err()
 }
 
-// QueryIndexesInput 查询索引输入参数
-type QueryIndexesInput struct {
-	TableName string
-	Schema    string
-}
-
-// QueryIndexes 查询表索引
-func (o *OracleCompatibleInspector) QueryIndexes(ctx context.Context, input QueryIndexesInput) ([]model.Index, error) {
+// queryIndexes 查询表索引
+func (o *OracleCompatibleInspector) queryIndexes(ctx context.Context, tableName, schema string) ([]model.Index, error) {
 	var query string
 	var args []interface{}
 
-	if input.Schema != "" {
-		query = `
-			SELECT 
-				i.INDEX_NAME,
-				i.UNIQUENESS,
-				ic.COLUMN_NAME
-			FROM ALL_INDEXES i
-			JOIN ALL_IND_COLUMNS ic ON i.OWNER = ic.INDEX_OWNER AND i.INDEX_NAME = ic.INDEX_NAME
-			WHERE i.TABLE_NAME = ` + o.placeholderStr(1) + ` AND i.OWNER = ` + o.placeholderStr(2) + `
-			ORDER BY i.INDEX_NAME, ic.COLUMN_POSITION
-		`
-		args = append(args, input.TableName, input.Schema)
+	if schema != "" {
+		query = fmt.Sprintf(queryIndexesAllSQL, o.placeholderStr(1), o.placeholderStr(2))
+		args = append(args, tableName, schema)
 	} else {
-		query = `
-			SELECT 
-				i.INDEX_NAME,
-				i.UNIQUENESS,
-				ic.COLUMN_NAME
-			FROM USER_INDEXES i
-			JOIN USER_IND_COLUMNS ic ON i.INDEX_NAME = ic.INDEX_NAME
-			WHERE i.TABLE_NAME = ` + o.placeholderStr(1) + `
-			ORDER BY i.INDEX_NAME, ic.COLUMN_POSITION
-		`
-		args = append(args, input.TableName)
+		query = fmt.Sprintf(queryIndexesUserSQL, o.placeholderStr(1))
+		args = append(args, tableName)
 	}
 
 	rows, err := o.GetDB().QueryContext(ctx, query, args...)
@@ -263,20 +373,12 @@ func (o *OracleCompatibleInspector) QueryIndexes(ctx context.Context, input Quer
 	// 检查主键索引
 	var pkQuery string
 	var pkArgs []interface{}
-	if input.Schema != "" {
-		pkQuery = `
-			SELECT cons.CONSTRAINT_NAME
-			FROM ALL_CONSTRAINTS cons
-			WHERE cons.TABLE_NAME = ` + o.placeholderStr(1) + ` AND cons.OWNER = ` + o.placeholderStr(2) + ` AND cons.CONSTRAINT_TYPE = 'P'
-		`
-		pkArgs = append(pkArgs, input.TableName, input.Schema)
+	if schema != "" {
+		pkQuery = fmt.Sprintf(queryPKNameAllSQL, o.placeholderStr(1), o.placeholderStr(2))
+		pkArgs = append(pkArgs, tableName, schema)
 	} else {
-		pkQuery = `
-			SELECT cons.CONSTRAINT_NAME
-			FROM USER_CONSTRAINTS cons
-			WHERE cons.TABLE_NAME = ` + o.placeholderStr(1) + ` AND cons.CONSTRAINT_TYPE = 'P'
-		`
-		pkArgs = append(pkArgs, input.TableName)
+		pkQuery = fmt.Sprintf(queryPKNameUserSQL, o.placeholderStr(1))
+		pkArgs = append(pkArgs, tableName)
 	}
 
 	var pkName string
@@ -302,47 +404,17 @@ func (o *OracleCompatibleInspector) QueryIndexes(ctx context.Context, input Quer
 	return indexes, rows.Err()
 }
 
-// QueryForeignKeysInput 查询外键输入参数
-type QueryForeignKeysInput struct {
-	TableName string
-	Schema    string
-}
-
-// QueryForeignKeys 查询表外键
-func (o *OracleCompatibleInspector) QueryForeignKeys(ctx context.Context, input QueryForeignKeysInput) ([]model.ForeignKey, error) {
+// queryForeignKeys 查询表外键
+func (o *OracleCompatibleInspector) queryForeignKeys(ctx context.Context, tableName, schema string) ([]model.ForeignKey, error) {
 	var query string
 	var args []interface{}
 
-	if input.Schema != "" {
-		query = `
-			SELECT 
-				cons.CONSTRAINT_NAME,
-				col.COLUMN_NAME,
-				refCons.TABLE_NAME as REF_TABLE,
-				refCol.COLUMN_NAME as REF_COLUMN,
-				cons.DELETE_RULE
-			FROM ALL_CONSTRAINTS cons
-			JOIN ALL_CONS_COLUMNS col ON cons.OWNER = col.OWNER AND cons.CONSTRAINT_NAME = col.CONSTRAINT_NAME
-			JOIN ALL_CONSTRAINTS refCons ON cons.R_OWNER = refCons.OWNER AND cons.R_CONSTRAINT_NAME = refCons.CONSTRAINT_NAME
-			JOIN ALL_CONS_COLUMNS refCol ON refCons.OWNER = refCol.OWNER AND refCons.CONSTRAINT_NAME = refCol.CONSTRAINT_NAME AND col.POSITION = refCol.POSITION
-			WHERE cons.TABLE_NAME = ` + o.placeholderStr(1) + ` AND cons.OWNER = ` + o.placeholderStr(2) + ` AND cons.CONSTRAINT_TYPE = 'R'
-		`
-		args = append(args, input.TableName, input.Schema)
+	if schema != "" {
+		query = fmt.Sprintf(queryForeignKeysAllSQL, o.placeholderStr(1), o.placeholderStr(2))
+		args = append(args, tableName, schema)
 	} else {
-		query = `
-			SELECT 
-				cons.CONSTRAINT_NAME,
-				col.COLUMN_NAME,
-				refCons.TABLE_NAME as REF_TABLE,
-				refCol.COLUMN_NAME as REF_COLUMN,
-				cons.DELETE_RULE
-			FROM USER_CONSTRAINTS cons
-			JOIN USER_CONS_COLUMNS col ON cons.CONSTRAINT_NAME = col.CONSTRAINT_NAME
-			JOIN USER_CONSTRAINTS refCons ON cons.R_CONSTRAINT_NAME = refCons.CONSTRAINT_NAME
-			JOIN USER_CONS_COLUMNS refCol ON refCons.CONSTRAINT_NAME = refCol.CONSTRAINT_NAME AND col.POSITION = refCol.POSITION
-			WHERE cons.TABLE_NAME = ` + o.placeholderStr(1) + ` AND cons.CONSTRAINT_TYPE = 'R'
-		`
-		args = append(args, input.TableName)
+		query = fmt.Sprintf(queryForeignKeysUserSQL, o.placeholderStr(1))
+		args = append(args, tableName)
 	}
 
 	rows, err := o.GetDB().QueryContext(ctx, query, args...)
@@ -369,22 +441,16 @@ func (o *OracleCompatibleInspector) QueryForeignKeys(ctx context.Context, input 
 	return foreignKeys, rows.Err()
 }
 
-// QueryTableCommentInput 查询表注释输入参数
-type QueryTableCommentInput struct {
-	TableName string
-	Schema    string
-}
-
-// QueryTableComment 查询表注释
-func (o *OracleCompatibleInspector) QueryTableComment(ctx context.Context, input QueryTableCommentInput) (string, error) {
+// queryTableComment 查询表注释
+func (o *OracleCompatibleInspector) queryTableComment(ctx context.Context, tableName, schema string) (string, error) {
 	var query string
 	var args []interface{}
-	if input.Schema != "" {
-		query = `SELECT COMMENTS FROM ALL_TAB_COMMENTS WHERE TABLE_NAME = ` + o.placeholderStr(1) + ` AND OWNER = ` + o.placeholderStr(2) + ``
-		args = append(args, input.TableName, input.Schema)
+	if schema != "" {
+		query = fmt.Sprintf(queryTableCommentAllSQL, o.placeholderStr(1), o.placeholderStr(2))
+		args = append(args, tableName, schema)
 	} else {
-		query = `SELECT COMMENTS FROM USER_TAB_COMMENTS WHERE TABLE_NAME = ` + o.placeholderStr(1) + ``
-		args = append(args, input.TableName)
+		query = fmt.Sprintf(queryTableCommentUserSQL, o.placeholderStr(1))
+		args = append(args, tableName)
 	}
 	var comment sql.NullString
 	if err := o.GetDB().QueryRowContext(ctx, query, args...).Scan(&comment); err != nil {

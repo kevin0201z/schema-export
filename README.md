@@ -89,7 +89,7 @@ GOOS=darwin GOARCH=amd64 go build -o schema-export-darwin ./cmd/schema-export
 # 指定输出文件名（多格式导出时会自动调整扩展名）
 ./schema-export export \
   --type dm \
-  --dsn "dm://SYSDBA:password@localhost:5236?schema=MC_WYWXZJGLPT" \
+  --dsn "dm://SYSDBA:password@localhost:5236?schema=sc" \
   --formats markdown,sql \
   --output ./docs/schema.md
 # 将生成：schema.md 和 schema.sql
@@ -101,7 +101,7 @@ GOOS=darwin GOARCH=amd64 go build -o schema-export-darwin ./cmd/schema-export
 # 达梦 DSN 格式（推荐指定 schema）
 ./schema-export export \
   --type dm \
-  --dsn "dm://SYSDBA:password@localhost:5236?schema=MC_WYWXZJGLPT" \
+  --dsn "dm://SYSDBA:password@localhost:5236?schema=sc" \
   --output ./docs
 
 # Oracle DSN 格式（纯 Go 驱动，无需安装 Oracle Client）
@@ -147,11 +147,11 @@ export EXPORT_SPLIT=true
 # 组合过滤
 ./schema-export export --tables users,orders --exclude orders_archive
 
-# 导出指定 schema 下以 TB_ 开头的表
+# 导出指定 schema 下以 tb_ 开头的表
 ./schema-export export \
   --type dm \
-  --dsn "dm://SYSDBA:password@localhost:5236?schema=MC_WYWXZJGLPT" \
-  --patterns "^TB_"
+  --dsn "dm://SYSDBA:password@localhost:5236?schema=sc" \
+  --patterns "^tb_"
 ```
 
 ## CLI 参考
@@ -418,7 +418,7 @@ ALTER TABLE orders ADD CONSTRAINT fk_order_user FOREIGN KEY (user_id) REFERENCES
 # 达梦数据库
 ./schema-export export --type dm \
   --dsn "dm://SYSDBA:password@localhost:5236" \
-  --schema MC_WYWXZJGLPT
+  --schema sc
 
 # Oracle 数据库
 ./schema-export export --type oracle \
@@ -431,7 +431,7 @@ ALTER TABLE orders ADD CONSTRAINT fk_order_user FOREIGN KEY (user_id) REFERENCES
 ```bash
 # 达梦数据库
 ./schema-export export --type dm \
-  --dsn "dm://SYSDBA:password@localhost:5236?schema=MC_WYWXZJGLPT"
+  --dsn "dm://SYSDBA:password@localhost:5236?schema=sc"
 
 # Oracle 数据库
 ./schema-export export --type oracle \

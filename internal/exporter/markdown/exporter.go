@@ -19,9 +19,15 @@ type Exporter struct {
 // NewExporter 创建 Markdown 导出器
 func NewExporter() *Exporter {
 	tmpl := template.Must(template.New("markdown").Funcs(template.FuncMap{
-		"join": strings.Join,
+		"join":       strings.Join,
+		"toLower":    strings.ToLower,
+		"hasPrefix":  strings.HasPrefix,
+		"hasSuffix":  strings.HasSuffix,
+		"contains":   strings.Contains,
+		"trimPrefix": strings.TrimPrefix,
+		"trimSuffix": strings.TrimSuffix,
 	}).Parse(tableTemplate))
-	
+
 	return &Exporter{
 		template: tmpl,
 	}
@@ -67,19 +73,34 @@ func (e *Exporter) exportSingleFile(tables []model.Table, options exporter.Expor
 		return fmt.Errorf("failed to create file: %w", err)
 	}
 	defer file.Close()
-	
+
 	// 写入文件头
-	fmt.Fprintln(file, "# Database Schema Documentation")
+	fmt.Fprintln(file, "# 数据库结构文档")
 	fmt.Fprintln(file, "")
-	fmt.Fprintf(file, "Total Tables: %d\n\n", len(tables))
-	
-	// 写入目录
-	fmt.Fprintln(file, "## Table of Contents")
+	fmt.Fprintf(file, "**总表数:** %d\n\n", len(tables))
+
+	// 写入 Schema 概览
+	fmt.Fprintln(file, "## 概览")
+	fmt.Fprintln(file, "")
+	fmt.Fprintln(file, "### 表清单")
+	fmt.Fprintln(file, "")
 	for _, table := range tables {
-		fmt.Fprintf(file, "- [%s](#table-%s)\n", table.Name, strings.ToLower(table.Name))
+		if table.Comment != "" {
+			fmt.Fprintf(file, "- **%s**: %s\n", table.Name, table.Comment)
+		} else {
+			fmt.Fprintf(file, "- **%s**\n", table.Name)
+		}
 	}
 	fmt.Fprintln(file, "")
-	
+
+	// 写入详细目录
+	fmt.Fprintln(file, "### 目录")
+	fmt.Fprintln(file, "")
+	for _, table := range tables {
+		fmt.Fprintf(file, "- [%s](#表-%s)\n", table.Name, strings.ToLower(table.Name))
+	}
+	fmt.Fprintln(file, "")
+
 	// 写入每个表的详细信息
 	for _, table := range tables {
 		if err := e.template.Execute(file, table); err != nil {
@@ -87,7 +108,7 @@ func (e *Exporter) exportSingleFile(tables []model.Table, options exporter.Expor
 		}
 		fmt.Fprintln(file, "")
 	}
-	
+
 	return nil
 }
 
@@ -97,21 +118,24 @@ func (e *Exporter) exportSplitFiles(tables []model.Table, options exporter.Expor
 	if err := os.MkdirAll(markdownDir, 0755); err != nil {
 		return fmt.Errorf("failed to create markdown directory: %w", err)
 	}
-	
+
 	for _, table := range tables {
 		outputPath := filepath.Join(markdownDir, table.Name+".md")
 		file, err := os.Create(outputPath)
 		if err != nil {
 			return fmt.Errorf("failed to create file %s: %w", outputPath, err)
 		}
-		
+
+		// 写入单个文件的头部
+		fmt.Fprintf(file, "# 表: %s\n\n", table.Name)
+
 		if err := e.template.Execute(file, table); err != nil {
 			file.Close()
 			return fmt.Errorf("failed to execute template: %w", err)
 		}
 		file.Close()
 	}
-	
+
 	return nil
 }
 
@@ -125,43 +149,89 @@ func (e *Exporter) GetExtension() string {
 	return ".md"
 }
 
-// tableTemplate Markdown 表模板
-const tableTemplate = `## Table: {{.Name}}
+// tableTemplate Markdown 表模板 - 中文显示
+const tableTemplate = `## 表: {{.Name}}
 
-{{if .Comment}}**Description:** {{.Comment}}
+{{if .Comment}}**描述:** {{.Comment}}
 
 {{end -}}
-### Columns
+**表类型:** {{.Type}}
 
-| Column | Type | Nullable | Default | Comment |
-|--------|------|----------|---------|---------|
+### 基本信息
+
+| 属性 | 值 |
+|------|-----|
+| 表名 | {{.Name}} |
+| 类型 | {{.Type}} |
+{{if .Comment}}| 描述 | {{.Comment}} |{{end}}
+| 字段数 | {{len .Columns}} |
+| 索引数 | {{len .Indexes}} |
+| 外键数 | {{len .ForeignKeys}} |
+
+### 字段详情
+
+| 字段名 | 数据类型 | 长度/精度 | 可空 | 默认值 | 约束 | 注释 |
+|--------|----------|-----------|------|--------|------|------|
 {{- range .Columns }}
-| {{.Name}} | {{.GetFullDataType}}{{if .IsPrimaryKey}} PK{{end}}{{if .IsAutoIncrement}} AI{{end}} | {{if .IsNullable}}YES{{else}}NO{{end}} | {{.DefaultValue}} | {{.Comment}} |
+| {{.Name}} | {{.DataType}} | {{if gt .Length 0}}{{.Length}}{{else if gt .Precision 0}}{{if gt .Scale 0}}{{.Precision}},{{.Scale}}{{else}}{{.Precision}}{{end}}{{else}}-{{end}} | {{if .IsNullable}}是{{else}}否{{end}} | {{if .DefaultValue}}{{.DefaultValue}}{{else}}-{{end}} | {{if .IsPrimaryKey}}主键 {{end}}{{if .IsAutoIncrement}}自增 {{end}}{{if not .IsNullable}}非空{{end}} | {{if .Comment}}{{.Comment}}{{else}}-{{end}} |
 {{- end }}
 
-### Indexes
+### 约束
+
+#### 主键
+{{$hasPK := false}}
+{{- range .Columns }}
+{{- if .IsPrimaryKey }}
+{{$hasPK = true}}
+- **{{.Name}}**: {{.DataType}}{{if gt .Length 0}}({{.Length}}){{else if gt .Precision 0}}({{if gt .Scale 0}}{{.Precision}},{{.Scale}}{{else}}{{.Precision}}{{end}}){{end}} - {{if .Comment}}{{.Comment}}{{else}}主键{{end}}
+{{- end }}
+{{- end }}
+{{if not $hasPK}}
+*未定义主键*
+{{end}}
+
+#### 唯一约束
+{{$hasUnique := false}}
+{{- range .Indexes }}
+{{- if .IsUnique }}
+{{$hasUnique = true}}
+- **{{.Name}}**: {{.GetColumnsString}}
+{{- end }}
+{{- end }}
+{{if not $hasUnique}}
+*未定义唯一约束*
+{{end}}
+
+### 索引
 
 {{if .Indexes -}}
-| Index | Type | Columns |
-|-------|------|---------|
+| 索引名 | 类型 | 字段 | 是否唯一 | 是否主键 |
+|--------|------|------|----------|----------|
 {{- range .Indexes }}
-| {{.Name}} | {{.Type}} | {{.GetColumnsString}} |
+| {{.Name}} | {{.Type}} | {{.GetColumnsString}} | {{if .IsUnique}}是{{else}}否{{end}} | {{if .IsPrimary}}是{{else}}否{{end}} |
 {{- end }}
 {{else -}}
-*No indexes defined*
-{{- end }}
+*未定义索引*
+{{end}}
 
-### Foreign Keys
+### 外键
 
 {{if .ForeignKeys -}}
-| Foreign Key | Column | Reference | On Delete |
-|-------------|--------|-----------|-----------|
+| 外键名 | 字段 | 引用表 | 引用字段 | 删除规则 | 更新规则 |
+|--------|------|--------|----------|----------|----------|
 {{- range .ForeignKeys }}
-| {{.Name}} | {{.Column}} | {{.GetReferenceString}} | {{.GetOnDeleteRule}} |
+| {{.Name}} | {{.Column}} | {{.RefTable}} | {{.RefColumn}} | {{.GetOnDeleteRule}} | {{.GetOnUpdateRule}} |
+{{- end }}
+
+#### 关联关系
+{{- range .ForeignKeys }}
+- **{{.Name}}**: ` + "`" + `{{$.Name}}.{{.Column}}` + "`" + ` → ` + "`" + `{{.RefTable}}.{{.RefColumn}}` + "`" + ` (删除时{{.GetOnDeleteRule}})
 {{- end }}
 {{else -}}
-*No foreign keys defined*
-{{- end }}
+*未定义外键*
+
+此表没有与其他表的外键关联关系。
+{{end}}
 
 ---
 `

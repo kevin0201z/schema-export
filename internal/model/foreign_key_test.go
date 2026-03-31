@@ -6,9 +6,9 @@ import (
 
 func TestGetReferenceString(t *testing.T) {
 	tests := []struct {
-		name       string
-		fk         ForeignKey
-		expected   string
+		name     string
+		fk       ForeignKey
+		expected string
 	}{
 		{
 			name: "normal reference",

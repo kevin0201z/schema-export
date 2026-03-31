@@ -6,7 +6,8 @@ import (
 	"fmt"
 	"strings"
 
-	_ "gitee.com/chunanyong/dm" // 达梦 Go 驱动
+	_ "dm" // 达梦 Go 驱动（本地驱动）
+
 	"github.com/schema-export/schema-export/internal/database"
 	"github.com/schema-export/schema-export/internal/inspector"
 	"github.com/schema-export/schema-export/internal/model"
@@ -276,10 +277,10 @@ func (i *Inspector) GetColumns(ctx context.Context, tableName string) ([]model.C
 func (i *Inspector) GetIndexes(ctx context.Context, tableName string) ([]model.Index, error) {
 	config := i.GetConfig()
 	schema := config.Schema
-	
+
 	var query string
 	var args []interface{}
-	
+
 	if schema != "" {
 		query = `
 			SELECT 
@@ -305,20 +306,20 @@ func (i *Inspector) GetIndexes(ctx context.Context, tableName string) ([]model.I
 		`
 		args = append(args, tableName)
 	}
-	
+
 	rows, err := i.GetDB().QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query indexes: %w", err)
 	}
 	defer rows.Close()
-	
+
 	indexMap := make(map[string]*model.Index)
 	for rows.Next() {
 		var indexName, uniqueness, columnName string
 		if err := rows.Scan(&indexName, &uniqueness, &columnName); err != nil {
 			return nil, err
 		}
-		
+
 		idx, exists := indexMap[indexName]
 		if !exists {
 			idx = &model.Index{
@@ -335,7 +336,7 @@ func (i *Inspector) GetIndexes(ctx context.Context, tableName string) ([]model.I
 		}
 		idx.Columns = append(idx.Columns, columnName)
 	}
-	
+
 	// 检查主键索引
 	var pkQuery string
 	var pkArgs []interface{}
@@ -354,7 +355,7 @@ func (i *Inspector) GetIndexes(ctx context.Context, tableName string) ([]model.I
 		`
 		pkArgs = append(pkArgs, tableName)
 	}
-	
+
 	var pkName string
 	if err := i.GetDB().QueryRowContext(ctx, pkQuery, pkArgs...).Scan(&pkName); err == nil {
 		if idx, exists := indexMap[pkName]; exists {
@@ -362,12 +363,12 @@ func (i *Inspector) GetIndexes(ctx context.Context, tableName string) ([]model.I
 			idx.Type = model.IndexTypePrimary
 		}
 	}
-	
+
 	indexes := make([]model.Index, 0, len(indexMap))
 	for _, idx := range indexMap {
 		indexes = append(indexes, *idx)
 	}
-	
+
 	return indexes, rows.Err()
 }
 
@@ -375,10 +376,10 @@ func (i *Inspector) GetIndexes(ctx context.Context, tableName string) ([]model.I
 func (i *Inspector) GetForeignKeys(ctx context.Context, tableName string) ([]model.ForeignKey, error) {
 	config := i.GetConfig()
 	schema := config.Schema
-	
+
 	var query string
 	var args []interface{}
-	
+
 	if schema != "" {
 		query = `
 			SELECT 
@@ -410,13 +411,13 @@ func (i *Inspector) GetForeignKeys(ctx context.Context, tableName string) ([]mod
 		`
 		args = append(args, tableName)
 	}
-	
+
 	rows, err := i.GetDB().QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query foreign keys: %w", err)
 	}
 	defer rows.Close()
-	
+
 	var foreignKeys []model.ForeignKey
 	for rows.Next() {
 		var fk model.ForeignKey
@@ -431,7 +432,7 @@ func (i *Inspector) GetForeignKeys(ctx context.Context, tableName string) ([]mod
 		}
 		foreignKeys = append(foreignKeys, fk)
 	}
-	
+
 	return foreignKeys, rows.Err()
 }
 

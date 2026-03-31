@@ -49,12 +49,14 @@ jobs:
       uses: actions/setup-go@v4
       with:
         go-version: '1.26'
+    - name: Install golangci-lint
+      run: |
+        go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
     - name: Run golangci-lint
-      uses: golangci/golangci-lint-action@v3
-      with:
-        version: v1.59.0
-        install-mode: script
-        args: --timeout 5m
+      env:
+        PATH: ${{ env.PATH }}:$(go env GOPATH)/bin
+      run: |
+        $(go env GOPATH)/bin/golangci-lint run --timeout 5m
 
   test:
     name: Unit tests (matrix)

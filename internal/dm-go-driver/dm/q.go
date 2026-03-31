@@ -5,10 +5,12 @@
 package dm
 
 import (
-	"dm/util"
+	"database/sql/driver"
 	"math"
 	"strconv"
 	"strings"
+
+	"dm/util"
 )
 
 const (
@@ -61,6 +63,8 @@ type DmIntervalDT struct {
 	fraction int
 
 	scaleForSvr int
+
+	Valid bool
 }
 
 func (dt *DmIntervalDT) init() {
@@ -74,6 +78,7 @@ func (dt *DmIntervalDT) init() {
 	dt.seconds = 0
 	dt.fraction = 0
 	dt.scaleForSvr = 0
+	dt.Valid = true
 }
 
 func newDmIntervalDTByBytes(bytes []byte) *DmIntervalDT {
@@ -81,45 +86,45 @@ func newDmIntervalDTByBytes(bytes []byte) *DmIntervalDT {
 	dt.init()
 
 	dt._type = bytes[21]
-	dt.scaleForSvr = int(Dm_build_1219.Dm_build_1321(bytes, 20))
+	dt.scaleForSvr = int(Dm_build_1346.Dm_build_1448(bytes, 20))
 	dt.leadScale = (dt.scaleForSvr >> 4) & 0x0000000F
 	dt.secScale = dt.scaleForSvr & 0x0000000F
 
 	switch dt._type {
 	case QUA_D:
-		dt.days = int(Dm_build_1219.Dm_build_1321(bytes, 0))
+		dt.days = int(Dm_build_1346.Dm_build_1448(bytes, 0))
 	case QUA_DH:
-		dt.days = int(Dm_build_1219.Dm_build_1321(bytes, 0))
-		dt.hours = int(Dm_build_1219.Dm_build_1321(bytes, 4))
+		dt.days = int(Dm_build_1346.Dm_build_1448(bytes, 0))
+		dt.hours = int(Dm_build_1346.Dm_build_1448(bytes, 4))
 	case QUA_DHM:
-		dt.days = int(Dm_build_1219.Dm_build_1321(bytes, 0))
-		dt.hours = int(Dm_build_1219.Dm_build_1321(bytes, 4))
-		dt.minutes = int(Dm_build_1219.Dm_build_1321(bytes, 8))
+		dt.days = int(Dm_build_1346.Dm_build_1448(bytes, 0))
+		dt.hours = int(Dm_build_1346.Dm_build_1448(bytes, 4))
+		dt.minutes = int(Dm_build_1346.Dm_build_1448(bytes, 8))
 	case QUA_DHMS:
-		dt.days = int(Dm_build_1219.Dm_build_1321(bytes, 0))
-		dt.hours = int(Dm_build_1219.Dm_build_1321(bytes, 4))
-		dt.minutes = int(Dm_build_1219.Dm_build_1321(bytes, 8))
-		dt.seconds = int(Dm_build_1219.Dm_build_1321(bytes, 12))
-		dt.fraction = int(Dm_build_1219.Dm_build_1321(bytes, 16))
+		dt.days = int(Dm_build_1346.Dm_build_1448(bytes, 0))
+		dt.hours = int(Dm_build_1346.Dm_build_1448(bytes, 4))
+		dt.minutes = int(Dm_build_1346.Dm_build_1448(bytes, 8))
+		dt.seconds = int(Dm_build_1346.Dm_build_1448(bytes, 12))
+		dt.fraction = int(Dm_build_1346.Dm_build_1448(bytes, 16))
 	case QUA_H:
-		dt.hours = int(Dm_build_1219.Dm_build_1321(bytes, 4))
+		dt.hours = int(Dm_build_1346.Dm_build_1448(bytes, 4))
 	case QUA_HM:
-		dt.hours = int(Dm_build_1219.Dm_build_1321(bytes, 4))
-		dt.minutes = int(Dm_build_1219.Dm_build_1321(bytes, 8))
+		dt.hours = int(Dm_build_1346.Dm_build_1448(bytes, 4))
+		dt.minutes = int(Dm_build_1346.Dm_build_1448(bytes, 8))
 	case QUA_HMS:
-		dt.hours = int(Dm_build_1219.Dm_build_1321(bytes, 4))
-		dt.minutes = int(Dm_build_1219.Dm_build_1321(bytes, 8))
-		dt.seconds = int(Dm_build_1219.Dm_build_1321(bytes, 12))
-		dt.fraction = int(Dm_build_1219.Dm_build_1321(bytes, 16))
+		dt.hours = int(Dm_build_1346.Dm_build_1448(bytes, 4))
+		dt.minutes = int(Dm_build_1346.Dm_build_1448(bytes, 8))
+		dt.seconds = int(Dm_build_1346.Dm_build_1448(bytes, 12))
+		dt.fraction = int(Dm_build_1346.Dm_build_1448(bytes, 16))
 	case QUA_M:
-		dt.minutes = int(Dm_build_1219.Dm_build_1321(bytes, 8))
+		dt.minutes = int(Dm_build_1346.Dm_build_1448(bytes, 8))
 	case QUA_MS:
-		dt.minutes = int(Dm_build_1219.Dm_build_1321(bytes, 8))
-		dt.seconds = int(Dm_build_1219.Dm_build_1321(bytes, 12))
-		dt.fraction = int(Dm_build_1219.Dm_build_1321(bytes, 16))
+		dt.minutes = int(Dm_build_1346.Dm_build_1448(bytes, 8))
+		dt.seconds = int(Dm_build_1346.Dm_build_1448(bytes, 12))
+		dt.fraction = int(Dm_build_1346.Dm_build_1448(bytes, 16))
 	case QUA_S:
-		dt.seconds = int(Dm_build_1219.Dm_build_1321(bytes, 12))
-		dt.fraction = int(Dm_build_1219.Dm_build_1321(bytes, 16))
+		dt.seconds = int(Dm_build_1346.Dm_build_1448(bytes, 12))
+		dt.fraction = int(Dm_build_1346.Dm_build_1448(bytes, 16))
 	}
 	if dt.days < 0 {
 		dt.days = -dt.days
@@ -338,6 +343,9 @@ func (dt *DmIntervalDT) GetDTType() byte {
 }
 
 func (dt *DmIntervalDT) String() string {
+	if !dt.Valid {
+		return ""
+	}
 	var l, destLen int
 	var dStr, hStr, mStr, sStr, nStr string
 	interval := "INTERVAL "
@@ -597,6 +605,8 @@ func (dest *DmIntervalDT) Scan(src interface{}) error {
 	switch src := src.(type) {
 	case nil:
 		*dest = *new(DmIntervalDT)
+
+		(*dest).Valid = false
 		return nil
 	case *DmIntervalDT:
 		*dest = *src
@@ -611,6 +621,13 @@ func (dest *DmIntervalDT) Scan(src interface{}) error {
 	default:
 		return UNSUPPORTED_SCAN
 	}
+}
+
+func (dt DmIntervalDT) Value() (driver.Value, error) {
+	if !dt.Valid {
+		return nil, nil
+	}
+	return dt, nil
 }
 
 func (dt *DmIntervalDT) checkScale(leadScale int) (int, error) {
@@ -756,7 +773,7 @@ func (dt *DmIntervalDT) setPrecForSvr(fullStr string, leadScale string, secScale
 		dt.secScale = SECDPREC_DEFAULT
 	}
 
-	dt.scaleForSvr = int(dt._type<<8) + (dt.leadScale << 4) + dt.secScale
+	dt.scaleForSvr = (int(dt._type) << 8) + (dt.leadScale << 4) + dt.secScale
 	return nil
 }
 
@@ -1194,19 +1211,19 @@ func (dt *DmIntervalDT) encode(scale int) ([]byte, error) {
 
 	bytes := make([]byte, 24)
 	if dt.negative {
-		Dm_build_1219.Dm_build_1235(bytes, 0, int32(-day))
-		Dm_build_1219.Dm_build_1235(bytes, 4, int32(-hour))
-		Dm_build_1219.Dm_build_1235(bytes, 8, int32(-minute))
-		Dm_build_1219.Dm_build_1235(bytes, 12, int32(-second))
-		Dm_build_1219.Dm_build_1235(bytes, 16, int32(-f))
-		Dm_build_1219.Dm_build_1235(bytes, 20, int32(scale))
+		Dm_build_1346.Dm_build_1362(bytes, 0, int32(-day))
+		Dm_build_1346.Dm_build_1362(bytes, 4, int32(-hour))
+		Dm_build_1346.Dm_build_1362(bytes, 8, int32(-minute))
+		Dm_build_1346.Dm_build_1362(bytes, 12, int32(-second))
+		Dm_build_1346.Dm_build_1362(bytes, 16, int32(-f))
+		Dm_build_1346.Dm_build_1362(bytes, 20, int32(scale))
 	} else {
-		Dm_build_1219.Dm_build_1235(bytes, 0, int32(day))
-		Dm_build_1219.Dm_build_1235(bytes, 4, int32(hour))
-		Dm_build_1219.Dm_build_1235(bytes, 8, int32(minute))
-		Dm_build_1219.Dm_build_1235(bytes, 12, int32(second))
-		Dm_build_1219.Dm_build_1235(bytes, 16, int32(f))
-		Dm_build_1219.Dm_build_1235(bytes, 20, int32(scale))
+		Dm_build_1346.Dm_build_1362(bytes, 0, int32(day))
+		Dm_build_1346.Dm_build_1362(bytes, 4, int32(hour))
+		Dm_build_1346.Dm_build_1362(bytes, 8, int32(minute))
+		Dm_build_1346.Dm_build_1362(bytes, 12, int32(second))
+		Dm_build_1346.Dm_build_1362(bytes, 16, int32(f))
+		Dm_build_1346.Dm_build_1362(bytes, 20, int32(scale))
 	}
 	return bytes, nil
 }
@@ -1370,6 +1387,7 @@ func (dt *DmIntervalDT) convertTo(scale int) (*DmIntervalDT, error) {
 		minutes:     destDT[minuteIndex],
 		seconds:     destDT[secondIndex],
 		fraction:    destDT[fractionIndex],
+		Valid:       true,
 	}, nil
 }
 
@@ -1423,4 +1441,15 @@ func incrementSecond(destType byte, dt []int) {
 		incrementMinute(destType, dt)
 		dt[secondIndex] = 0
 	}
+}
+
+func (dt *DmIntervalDT) checkValid() error {
+	if !dt.Valid {
+		return ECGO_IS_NULL.throw()
+	}
+	return nil
+}
+
+func (d *DmIntervalDT) GormDataType() string {
+	return "INTERVAL DAY TO SECOND"
 }

@@ -20,7 +20,7 @@ var StringUtil = &stringutil{}
 /*----------------------------------------------------*/
 func (StringUtil *stringutil) LineSeparator() string {
 	var lineSeparator string
-	if strings.Contains(runtime.GOOS, "windos") {
+	if strings.Contains(runtime.GOOS, "windows") {
 		lineSeparator = "\r\n"
 	} else if strings.Contains(runtime.GOOS, "mac") {
 		lineSeparator = "\r"
@@ -82,7 +82,6 @@ func (StringUtil *stringutil) HexStringToBytes(s string) []byte {
 	bs := make([]byte, 0)
 	flag := false
 
-	str = strings.TrimSpace(str)
 	if strings.Index(str, "0x") == 0 || strings.Index(str, "0X") == 0 {
 		str = str[2:]
 	}
@@ -215,4 +214,51 @@ func (StringUtil *stringutil) SubstringBetween(str string, open string, close st
 	} else {
 		return str[iopen:iclose]
 	}
+}
+
+//bug656976 在常量参数化时，将\+任意字符的两个字符解析成一个转义后字符，如：
+// 字符串参数'a\nb'解析成字符串参数'a换行b'
+func (StringUtil *stringutil) Translate(s string) string {
+	if !strings.ContainsRune(s, '\\') {
+		return s
+	}
+	reader := strings.NewReader(s)
+	trans := bytes.NewBufferString("")
+
+	for {
+		curRune, _, err := reader.ReadRune()
+		if err != nil {
+			break
+		}
+		if curRune != '\\' {
+			trans.WriteRune(curRune)
+		} else {
+			//转义规则参考mysql,'\'作为转义符必须消除,不管是否作为有真正含义的特殊字符,如\x也需要变化为x
+			nextRune, _, err := reader.ReadRune()
+			if err != nil {
+				break
+			}
+			switch nextRune {
+			case 'b':
+				trans.WriteRune('\b')
+				break
+			case 'f':
+				trans.WriteRune('\f')
+				break
+			case 'n':
+				trans.WriteRune('\n')
+				break
+			case 'r':
+				trans.WriteRune('\r')
+				break
+			case 't':
+				trans.WriteRune('\t')
+				break
+			default:
+				trans.WriteRune(nextRune)
+				break
+			}
+		}
+	}
+	return trans.String()
 }

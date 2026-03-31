@@ -5,6 +5,8 @@
 
 package dm
 
+import "database/sql/driver"
+
 type DmStruct struct {
 	TypeData
 	m_strctDesc *StructDescriptor // 结构体的描述信息
@@ -18,12 +20,21 @@ type DmStruct struct {
 	typeName string
 
 	elements []interface{}
+
+	// Valid为false代表DmArray数据在数据库中为NULL
+	Valid bool
 }
 
-func newDmStruct(typeName string, elements []interface{}) *DmStruct {
+// 数据库自定义类型Struct构造函数，typeName为库中定义的类型名称，elements为该类型每个字段的值
+//
+// 例如，自定义类型语句为：create or replace type myType as object (a1 int, a2 varchar);
+//
+// 则绑入绑出的go对象为: val := dm.NewDmStruct("myType", []interface{} {123, "abc"})
+func NewDmStruct(typeName string, elements []interface{}) *DmStruct {
 	ds := new(DmStruct)
 	ds.typeName = typeName
 	ds.elements = elements
+	ds.Valid = true
 	return ds
 }
 
@@ -37,6 +48,7 @@ func (ds *DmStruct) create(dc *DmConnection) (*DmStruct, error) {
 
 func newDmStructByTypeData(atData []TypeData, desc *TypeDescriptor) *DmStruct {
 	ds := new(DmStruct)
+	ds.Valid = true
 	ds.initTypeData()
 	ds.m_strctDesc = newStructDescriptorByTypeDescriptor(desc)
 	ds.m_attribs = atData
@@ -44,16 +56,28 @@ func newDmStructByTypeData(atData []TypeData, desc *TypeDescriptor) *DmStruct {
 }
 
 func (dest *DmStruct) Scan(src interface{}) error {
+	if dest == nil {
+		return ECGO_STORE_IN_NIL_POINTER.throw()
+	}
 	switch src := src.(type) {
 	case nil:
 		*dest = *new(DmStruct)
+		// 将Valid标志置false表示数据库中该列为NULL
+		(*dest).Valid = false
 		return nil
 	case *DmStruct:
 		*dest = *src
 		return nil
 	default:
-		return UNSUPPORTED_SCAN
+		return UNSUPPORTED_SCAN.throw()
 	}
+}
+
+func (dt DmStruct) Value() (driver.Value, error) {
+	if !dt.Valid {
+		return nil, nil
+	}
+	return dt, nil
 }
 
 func (ds *DmStruct) getAttribsTypeData() []TypeData {
@@ -84,11 +108,13 @@ func (ds *DmStruct) createByStructDescriptor(desc *StructDescriptor, conn *DmCon
 	return ds, nil
 }
 
-func (ds *DmStruct) getSQLTypeName() (string, error) {
+// 获取Struct对象在数据库中的类型名称
+func (ds *DmStruct) GetSQLTypeName() (string, error) {
 	return ds.m_strctDesc.m_typeDesc.getFulName()
 }
 
-func (ds *DmStruct) getAttributes() ([]interface{}, error) {
+// 获取Struct对象中的各个字段的值
+func (ds *DmStruct) GetAttributes() ([]interface{}, error) {
 	return TypeDataSV.toJavaArrayByDmStruct(ds)
 }
 
@@ -106,4 +132,11 @@ func (ds *DmStruct) getAttrValue(col int) (*TypeData, error) {
 		return nil, err
 	}
 	return &ds.m_attribs[col-1], nil
+}
+
+func (ds *DmStruct) checkValid() error {
+	if !ds.Valid {
+		return ECGO_IS_NULL.throw()
+	}
+	return nil
 }

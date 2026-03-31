@@ -8,7 +8,6 @@ import (
 	"bytes"
 	"context"
 	"database/sql/driver"
-	"dm/util"
 	"net"
 	"net/url"
 	"os"
@@ -17,80 +16,86 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
+
+	"dm/util"
 )
 
 const (
-	TimeZoneKey              = "timeZone"
-	EnRsCacheKey             = "enRsCache"
-	RsCacheSizeKey           = "rsCacheSize"
-	RsRefreshFreqKey         = "rsRefreshFreq"
-	LoginPrimary             = "loginPrimary"
-	LoginModeKey             = "loginMode"
-	LoginStatusKey           = "loginStatus"
-	LoginDscCtrlKey          = "loginDscCtrl"
-	SwitchTimesKey           = "switchTimes"
-	SwitchIntervalKey        = "switchInterval"
-	EpSelectorKey            = "epSelector"
-	PrimaryKey               = "primaryKey"
-	KeywordsKey              = "keywords"
-	CompressKey              = "compress"
-	CompressIdKey            = "compressId"
-	LoginEncryptKey          = "loginEncrypt"
-	CommunicationEncryptKey  = "communicationEncrypt"
-	DirectKey                = "direct"
-	Dec2DoubleKey            = "dec2double"
-	RwSeparateKey            = "rwSeparate"
-	RwPercentKey             = "rwPercent"
-	RwAutoDistributeKey      = "rwAutoDistribute"
-	CompatibleModeKey        = "compatibleMode"
-	CompatibleOraKey         = "comOra"
-	CipherPathKey            = "cipherPath"
-	DoSwitchKey              = "doSwitch"
-	ClusterKey               = "cluster"
-	LanguageKey              = "language"
-	DbAliveCheckFreqKey      = "dbAliveCheckFreq"
-	RwStandbyRecoverTimeKey  = "rwStandbyRecoverTime"
-	LogLevelKey              = "logLevel"
-	LogDirKey                = "logDir"
-	LogBufferPoolSizeKey     = "logBufferPoolSize"
-	LogBufferSizeKey         = "logBufferSize"
-	LogFlusherQueueSizeKey   = "logFlusherQueueSize"
-	LogFlushFreqKey          = "logFlushFreq"
-	StatEnableKey            = "statEnable"
-	StatDirKey               = "statDir"
-	StatFlushFreqKey         = "statFlushFreq"
-	StatHighFreqSqlCountKey  = "statHighFreqSqlCount"
-	StatSlowSqlCountKey      = "statSlowSqlCount"
-	StatSqlMaxCountKey       = "statSqlMaxCount"
-	StatSqlRemoveModeKey     = "statSqlRemoveMode"
-	AddressRemapKey          = "addressRemap"
-	UserRemapKey             = "userRemap"
-	ConnectTimeoutKey        = "connectTimeout"
-	LoginCertificateKey      = "loginCertificate"
-	UrlKey                   = "url"
-	HostKey                  = "host"
-	PortKey                  = "port"
-	UserKey                  = "user"
-	PasswordKey              = "password"
-	RwStandbyKey             = "rwStandby"
-	IsCompressKey            = "isCompress"
-	RwHAKey                  = "rwHA"
-	RwIgnoreSqlKey           = "rwIgnoreSql"
-	AppNameKey               = "appName"
-	OsNameKey                = "osName"
-	MppLocalKey              = "mppLocal"
-	SocketTimeoutKey         = "socketTimeout"
-	SessionTimeoutKey        = "sessionTimeout"
-	ContinueBatchOnErrorKey  = "continueBatchOnError"
-	BatchAllowMaxErrorsKey   = "batchAllowMaxErrors"
-	EscapeProcessKey         = "escapeProcess"
-	AutoCommitKey            = "autoCommit"
-	MaxRowsKey               = "maxRows"
-	RowPrefetchKey           = "rowPrefetch"
-	BufPrefetchKey           = "bufPrefetch"
-	LobModeKey               = "LobMode"
-	StmtPoolSizeKey          = "StmtPoolSize"
-	IgnoreCaseKey            = "ignoreCase"
+	TimeZoneKey             = "timeZone"
+	EnRsCacheKey            = "enRsCache"
+	RsCacheSizeKey          = "rsCacheSize"
+	RsRefreshFreqKey        = "rsRefreshFreq"
+	LoginPrimary            = "loginPrimary"
+	LoginModeKey            = "loginMode"
+	LoginStatusKey          = "loginStatus"
+	LoginDscCtrlKey         = "loginDscCtrl"
+	SwitchTimesKey          = "switchTimes"
+	SwitchIntervalKey       = "switchInterval"
+	EpSelectorKey           = "epSelector"
+	PrimaryKey              = "primaryKey"
+	KeywordsKey             = "keywords"
+	CompressKey             = "compress"
+	CompressIdKey           = "compressId"
+	LoginEncryptKey         = "loginEncrypt"
+	CommunicationEncryptKey = "communicationEncrypt"
+	DirectKey               = "direct"
+	Dec2DoubleKey           = "dec2double"
+	RwSeparateKey           = "rwSeparate"
+	RwPercentKey            = "rwPercent"
+	RwAutoDistributeKey     = "rwAutoDistribute"
+	CompatibleModeKey       = "compatibleMode"
+	CompatibleOraKey        = "comOra"
+	CipherPathKey           = "cipherPath"
+	DoSwitchKey             = "doSwitch"
+	DriverReconnectKey      = "driverReconnect"
+	ClusterKey              = "cluster"
+	LanguageKey             = "language"
+	DbAliveCheckFreqKey     = "dbAliveCheckFreq"
+	RwStandbyRecoverTimeKey = "rwStandbyRecoverTime"
+	LogLevelKey             = "logLevel"
+	LogDirKey               = "logDir"
+	LogBufferPoolSizeKey    = "logBufferPoolSize"
+	LogBufferSizeKey        = "logBufferSize"
+	LogFlusherQueueSizeKey  = "logFlusherQueueSize"
+	LogFlushFreqKey         = "logFlushFreq"
+	StatEnableKey           = "statEnable"
+	StatDirKey              = "statDir"
+	StatFlushFreqKey        = "statFlushFreq"
+	StatHighFreqSqlCountKey = "statHighFreqSqlCount"
+	StatSlowSqlCountKey     = "statSlowSqlCount"
+	StatSqlMaxCountKey      = "statSqlMaxCount"
+	StatSqlRemoveModeKey    = "statSqlRemoveMode"
+	AddressRemapKey         = "addressRemap"
+	UserRemapKey            = "userRemap"
+	ConnectTimeoutKey       = "connectTimeout"
+	LoginCertificateKey     = "loginCertificate"
+	UrlKey                  = "url"
+	HostKey                 = "host"
+	PortKey                 = "port"
+	UserKey                 = "user"
+	PasswordKey             = "password"
+	DialNameKey             = "dialName"
+	RwStandbyKey            = "rwStandby"
+	IsCompressKey           = "isCompress"
+	RwHAKey                 = "rwHA"
+	RwIgnoreSqlKey          = "rwIgnoreSql"
+	AppNameKey              = "appName"
+	OsNameKey               = "osName"
+	MppLocalKey             = "mppLocal"
+	SocketTimeoutKey        = "socketTimeout"
+	SessionTimeoutKey       = "sessionTimeout"
+	ContinueBatchOnErrorKey = "continueBatchOnError"
+	BatchAllowMaxErrorsKey  = "batchAllowMaxErrors"
+	EscapeProcessKey        = "escapeProcess"
+	AutoCommitKey           = "autoCommit"
+	MaxRowsKey              = "maxRows"
+	RowPrefetchKey          = "rowPrefetch"
+	BufPrefetchKey          = "bufPrefetch"
+	LobModeKey              = "LobMode"
+	StmtPoolSizeKey         = "StmtPoolSize"
+
 	AlwayseAllowCommitKey    = "AlwayseAllowCommit"
 	BatchTypeKey             = "batchType"
 	BatchNotOnCallKey        = "batchNotOnCall"
@@ -107,8 +112,9 @@ const (
 	DatabaseProductNameKey   = "databaseProductName"
 	OsAuthTypeKey            = "osAuthType"
 	SchemaKey                = "schema"
-
-	TIME_ZONE_DEFAULT int16 = 480
+	CatalogKey               = "catalog"
+	ServerOptionKey          = "serverOption"
+	ClobToBytesKey           = "clobToBytes"
 
 	DO_SWITCH_OFF             int32 = 0
 	DO_SWITCH_WHEN_CONN_ERROR int32 = 1
@@ -153,14 +159,28 @@ const (
 
 	LANGUAGE_EN int = 1
 
+	LANGUAGE_CNT_HK = 2
+
 	COLUMN_NAME_NATURAL_CASE = 0
 
 	COLUMN_NAME_UPPER_CASE = 1
 
 	COLUMN_NAME_LOWER_CASE = 2
 
-	compressDef   = Dm_build_680
-	compressIDDef = Dm_build_681
+	RW_SEPARATE_OFF int32 = 0
+
+	RW_SEPARATE_CLIENT int32 = 1
+
+	RW_SEPARATE_EP_GROUP int32 = 2
+
+	RW_SEPARATE_DB int32 = 3
+
+	RW_SEPARATE_DB_APPLY_WAIT int32 = 4
+
+	RW_SEPARATE_USER_DEFINED int32 = 5
+
+	compressDef   = Dm_build_784
+	compressIDDef = Dm_build_785
 
 	charCodeDef = ""
 
@@ -184,7 +204,7 @@ const (
 
 	rwStandbyDef = false
 
-	rwSeparateDef = false
+	rwSeparateDef = RW_SEPARATE_OFF
 
 	rwPercentDef = 25
 
@@ -214,7 +234,7 @@ const (
 
 	sessionTimeoutDef = 0
 
-	osAuthTypeDef = Dm_build_663
+	osAuthTypeDef = Dm_build_767
 
 	continueBatchOnErrorDef = false
 
@@ -224,15 +244,13 @@ const (
 
 	maxRowsDef = 0
 
-	rowPrefetchDef = Dm_build_664
+	rowPrefetchDef = Dm_build_768
 
 	bufPrefetchDef = 0
 
 	lobModeDef = 1
 
 	stmtPoolMaxSizeDef = 15
-
-	ignoreCaseDef = true
 
 	alwayseAllowCommitDef = true
 
@@ -249,12 +267,12 @@ const (
 	caseSensitiveDef = true
 
 	compatibleModeDef = 0
-
-	localTimezoneDef = TIME_ZONE_DEFAULT
 )
 
 type DmConnector struct {
 	filterable
+
+	mu sync.Mutex
 
 	dmDriver *DmDriver
 
@@ -296,7 +314,7 @@ type DmConnector struct {
 
 	rwStandby bool
 
-	rwSeparate bool
+	rwSeparate int32
 
 	rwPercent int32
 
@@ -308,6 +326,8 @@ type DmConnector struct {
 
 	doSwitch int32
 
+	driverReconnect bool
+
 	cluster int32
 
 	cipherPath string
@@ -317,6 +337,8 @@ type DmConnector struct {
 	user string
 
 	password string
+
+	dialName string
 
 	host string
 
@@ -356,8 +378,6 @@ type DmConnector struct {
 
 	stmtPoolMaxSize int
 
-	ignoreCase bool
-
 	alwayseAllowCommit bool
 
 	batchType int
@@ -390,7 +410,7 @@ type DmConnector struct {
 
 	schema string
 
-	reConnection *DmConnection
+	catalog string
 
 	logLevel int
 
@@ -415,6 +435,10 @@ type DmConnector struct {
 	statSqlMaxCount int
 
 	statSqlRemoveMode int
+
+	serverOption []string
+
+	clobToBytes bool
 }
 
 func (c *DmConnector) init() *DmConnector {
@@ -428,7 +452,7 @@ func (c *DmConnector) init() *DmConnector {
 	c.loginStatus = loginStatusDef
 	c.loginDscCtrl = false
 	c.switchTimes = 1
-	c.switchInterval = 1000
+	c.switchInterval = 200
 	c.epSelector = 0
 	c.keyWords = nil
 	c.loginEncrypt = loginEncryptDef
@@ -441,7 +465,8 @@ func (c *DmConnector) init() *DmConnector {
 	c.rwAutoDistribute = rwAutoDistributeDef
 	c.rwStandbyRecoverTime = rwStandbyRecoverTimeDef
 	c.rwIgnoreSql = false
-	c.doSwitch = DO_SWITCH_OFF
+	c.doSwitch = DO_SWITCH_WHEN_CONN_ERROR
+	c.driverReconnect = false
 	c.cluster = CLUSTER_TYPE_NORMAL
 	c.cipherPath = cipherPathDef
 	c.url = urlDef
@@ -465,7 +490,7 @@ func (c *DmConnector) init() *DmConnector {
 	c.bufPrefetch = bufPrefetchDef
 	c.lobMode = lobModeDef
 	c.stmtPoolMaxSize = stmtPoolMaxSizeDef
-	c.ignoreCase = ignoreCaseDef
+
 	c.alwayseAllowCommit = alwayseAllowCommitDef
 	c.batchType = 1
 	c.batchNotOnCall = false
@@ -476,7 +501,8 @@ func (c *DmConnector) init() *DmConnector {
 	c.columnNameCase = COLUMN_NAME_NATURAL_CASE
 	c.caseSensitive = caseSensitiveDef
 	c.compatibleMode = compatibleModeDef
-	c.localTimezone = localTimezoneDef
+	_, tzs := time.Now().Zone()
+	c.localTimezone = int16(tzs / 60)
 	c.idGenerator = dmConntorIDGenerator
 
 	c.logDir = LogDirDef
@@ -503,16 +529,17 @@ func (c *DmConnector) setAttributes(props *Properties) error {
 	c.port = int32(props.GetInt(PortKey, int(c.port), 0, 65535))
 	c.user = props.GetString(UserKey, c.user)
 	c.password = props.GetString(PasswordKey, c.password)
+	c.dialName = props.GetString(DialNameKey, "")
 	c.rwStandby = props.GetBool(RwStandbyKey, c.rwStandby)
 
 	if b := props.GetBool(IsCompressKey, false); b {
-		c.compress = Dm_build_679
+		c.compress = Dm_build_783
 	}
 
 	c.compress = props.GetInt(CompressKey, c.compress, 0, 2)
 	c.compressID = int8(props.GetInt(CompressIdKey, int(c.compressID), 0, 1))
 	c.enRsCache = props.GetBool(EnRsCacheKey, c.enRsCache)
-	c.localTimezone = int16(props.GetInt(TimeZoneKey, int(c.localTimezone), -720, 720))
+	c.localTimezone = int16(props.GetInt(TimeZoneKey, int(c.localTimezone), -779, 840))
 	c.rsCacheSize = props.GetInt(RsCacheSizeKey, c.rsCacheSize, 0, int(INT32_MAX))
 	c.rsRefreshFreq = props.GetInt(RsRefreshFreqKey, c.rsRefreshFreq, 0, int(INT32_MAX))
 	c.loginMode = int32(props.GetInt(LoginModeKey, int(c.loginMode), 0, 4))
@@ -524,14 +551,16 @@ func (c *DmConnector) setAttributes(props *Properties) error {
 	c.loginEncrypt = props.GetBool(LoginEncryptKey, c.loginEncrypt)
 	c.loginCertificate = props.GetTrimString(LoginCertificateKey, c.loginCertificate)
 	c.dec2Double = props.GetBool(Dec2DoubleKey, c.dec2Double)
+	parseLanguage(props.GetString(LanguageKey, ""))
 
-	c.rwSeparate = props.GetBool(RwSeparateKey, c.rwSeparate)
+	c.rwSeparate = int32(props.GetInt(RwSeparateKey, int(c.rwSeparate), 0, 4))
 	c.rwAutoDistribute = props.GetBool(RwAutoDistributeKey, c.rwAutoDistribute)
 	c.rwPercent = int32(props.GetInt(RwPercentKey, int(c.rwPercent), 0, 100))
 	c.rwHA = props.GetBool(RwHAKey, c.rwHA)
 	c.rwStandbyRecoverTime = props.GetInt(RwStandbyRecoverTimeKey, c.rwStandbyRecoverTime, 0, int(INT32_MAX))
 	c.rwIgnoreSql = props.GetBool(RwIgnoreSqlKey, c.rwIgnoreSql)
 	c.doSwitch = int32(props.GetInt(DoSwitchKey, int(c.doSwitch), 0, 2))
+	c.driverReconnect = props.GetBool(DriverReconnectKey, c.driverReconnect)
 	c.parseCluster(props)
 	c.cipherPath = props.GetTrimString(CipherPathKey, c.cipherPath)
 
@@ -558,10 +587,10 @@ func (c *DmConnector) setAttributes(props *Properties) error {
 	c.autoCommit = props.GetBool(AutoCommitKey, c.autoCommit)
 	c.maxRows = props.GetInt(MaxRowsKey, c.maxRows, 0, int(INT32_MAX))
 	c.rowPrefetch = props.GetInt(RowPrefetchKey, c.rowPrefetch, 0, int(INT32_MAX))
-	c.bufPrefetch = props.GetInt(BufPrefetchKey, c.bufPrefetch, int(Dm_build_665), int(Dm_build_666))
+	c.bufPrefetch = props.GetInt(BufPrefetchKey, c.bufPrefetch, int(Dm_build_769), int(Dm_build_770))
 	c.lobMode = props.GetInt(LobModeKey, c.lobMode, 1, 2)
 	c.stmtPoolMaxSize = props.GetInt(StmtPoolSizeKey, c.stmtPoolMaxSize, 0, int(INT32_MAX))
-	c.ignoreCase = props.GetBool(IgnoreCaseKey, c.ignoreCase)
+
 	c.alwayseAllowCommit = props.GetBool(AlwayseAllowCommitKey, c.alwayseAllowCommit)
 	c.batchType = props.GetInt(BatchTypeKey, c.batchType, 1, 2)
 	c.batchNotOnCall = props.GetBool(BatchNotOnCallKey, c.batchNotOnCall)
@@ -595,6 +624,7 @@ func (c *DmConnector) setAttributes(props *Properties) error {
 	}
 
 	c.schema = props.GetTrimString(SchemaKey, c.schema)
+	c.catalog = props.GetTrimString(CatalogKey, c.catalog)
 
 	c.logLevel = ParseLogLevel(props)
 	LogLevel = c.logLevel
@@ -620,33 +650,51 @@ func (c *DmConnector) setAttributes(props *Properties) error {
 	c.statSqlMaxCount = props.GetInt(StatSqlMaxCountKey, StatSqlMaxCountDef, 0, 100000)
 	StatSqlMaxCount = c.statSqlMaxCount
 	c.parseStatSqlRemoveMode(props)
+
+	c.parseServerOption(props)
+	c.clobToBytes = props.GetBool(ClobToBytesKey, ClobToBytesDef)
 	return nil
+}
+
+func (c *DmConnector) parseServerOption(props *Properties) {
+	value := props.GetString(ServerOptionKey, "")
+	if len(value) == 0 {
+		return
+	}
+
+	if strings.HasPrefix(value, "{") && strings.HasSuffix(value, "}") {
+
+		value = strings.TrimPrefix(value, "{")
+		value = strings.TrimSuffix(value, "}")
+	}
+
+	c.serverOption = strings.Split(value, ",")
 }
 
 func (c *DmConnector) parseOsAuthType(props *Properties) error {
 	value := props.GetString(OsAuthTypeKey, "")
 	if value != "" && !util.StringUtil.IsDigit(value) {
 		if util.StringUtil.EqualsIgnoreCase(value, "ON") {
-			c.osAuthType = Dm_build_663
+			c.osAuthType = Dm_build_767
 		} else if util.StringUtil.EqualsIgnoreCase(value, "SYSDBA") {
-			c.osAuthType = Dm_build_659
+			c.osAuthType = Dm_build_763
 		} else if util.StringUtil.EqualsIgnoreCase(value, "SYSAUDITOR") {
-			c.osAuthType = Dm_build_661
+			c.osAuthType = Dm_build_765
 		} else if util.StringUtil.EqualsIgnoreCase(value, "SYSSSO") {
-			c.osAuthType = Dm_build_660
+			c.osAuthType = Dm_build_764
 		} else if util.StringUtil.EqualsIgnoreCase(value, "AUTO") {
-			c.osAuthType = Dm_build_662
+			c.osAuthType = Dm_build_766
 		} else if util.StringUtil.EqualsIgnoreCase(value, "OFF") {
-			c.osAuthType = Dm_build_658
+			c.osAuthType = Dm_build_762
 		}
 	} else {
 		c.osAuthType = byte(props.GetInt(OsAuthTypeKey, int(c.osAuthType), 0, 4))
 	}
-	if c.user == "" && c.osAuthType == Dm_build_658 {
+	if c.user == "" && c.osAuthType == Dm_build_762 {
 		c.user = "SYSDBA"
-	} else if c.osAuthType != Dm_build_658 && c.user != "" {
+	} else if c.osAuthType != Dm_build_762 && c.user != "" {
 		return ECGO_OSAUTH_ERROR.throw()
-	} else if c.osAuthType != Dm_build_658 {
+	} else if c.osAuthType != Dm_build_762 {
 		c.user = os.Getenv("user")
 		c.password = ""
 	}
@@ -694,27 +742,46 @@ func (c *DmConnector) parseCluster(props *Properties) {
 	}
 }
 
-func (c *DmConnector) parseDSN(dsn string) (*Properties, string, error) {
+func (c *DmConnector) parseDSN(dsn string) (*Properties, string, string, error) {
 	var dsnProps = NewProperties()
-	url, err := url.Parse(dsn)
-	if err != nil {
-		return nil, "", err
+
+	if strings.Index(dsn, "dm://") != 0 {
+		return nil, "", "", DSN_INVALID_SCHEMA
 	}
-	if url.Scheme != "dm" {
-		return nil, "", DSN_INVALID_SCHEMA
+	dsn = dsn[5:]
+
+	urlString := dsn
+	queryIndex := strings.LastIndex(dsn, "?")
+	if queryIndex > 0 {
+		urlString = dsn[:queryIndex]
+		var queryString = dsn[queryIndex+1:]
+
+		for _, kvString := range strings.Split(queryString, "&") {
+			kv := strings.SplitN(kvString, "=", 2)
+			if kv != nil && len(kv) > 1 {
+				dsnProps.Set(kv[0], kv[1])
+			}
+		}
 	}
 
-	if url.User != nil {
-		c.user = url.User.Username()
-		c.password, _ = url.User.Password()
+	hostString := urlString
+	atIndex := strings.LastIndex(urlString, "@")
+	if atIndex == -1 {
+		return nil, "", "", DSN_INVALID_FORMAT
+	} else {
+		var userString = urlString[:atIndex]
+		hostString = urlString[atIndex+1:]
+		kv := strings.SplitN(userString, ":", 2)
+		if kv != nil && len(kv) > 1 {
+			c.user = kv[0]
+			c.password = kv[1]
+		}
 	}
-
-	q := url.Query()
-	for k := range q {
-		dsnProps.Set(k, q.Get(k))
+	if catalogIndex := strings.LastIndex(hostString, "/"); catalogIndex > 0 {
+		return dsnProps, hostString[0:catalogIndex], hostString[catalogIndex+1:], nil
 	}
+	return dsnProps, hostString, "", nil
 
-	return dsnProps, url.Host, nil
 }
 
 func (c *DmConnector) BuildDSN() string {
@@ -753,7 +820,7 @@ func (c *DmConnector) BuildDSN() string {
 }
 
 func (c *DmConnector) mergeConfigs(dsn string) error {
-	props, host, err := c.parseDSN(dsn)
+	props, host, catalog, err := c.parseDSN(dsn)
 	if err != nil {
 		return err
 	}
@@ -773,20 +840,41 @@ func (c *DmConnector) mergeConfigs(dsn string) error {
 
 	c.user = c.remap(c.user, userRemapStr)
 
-	if group, ok := ServerGroupMap[strings.ToLower(host)]; ok {
-		c.group = group
+	if a := props.GetTrimString(host, ""); a != "" {
+
+		if strings.HasPrefix(a, "(") && strings.HasSuffix(a, ")") {
+			a = strings.TrimSpace(a[1 : len(a)-1])
+		}
+		c.group = parseServerName(host, a)
+		if c.group != nil {
+			c.group.props = NewProperties()
+			c.group.props.SetProperties(GlobalProperties)
+		}
+	} else if group, ok := ServerGroupMap.Load(strings.ToLower(host)); ok {
+
+		c.group = group.(*epGroup)
 	} else {
 		host, port, err := net.SplitHostPort(host)
-		if err != nil || net.ParseIP(host) == nil {
-			c.host = hostDef
-		} else {
-			c.host = host
+		if err == nil {
+			ip := net.ParseIP(host)
+			var v4InV6Prefix = []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff}
+			if ip != nil && len(ip) == net.IPv6len && !bytes.Equal(ip[0:12], v4InV6Prefix) {
+
+				host = "[" + host + "]"
+			}
 		}
+
+		c.host = host
+
 		tmpPort, err := strconv.Atoi(port)
 		if err != nil {
 			c.port = portDef
 		} else {
 			c.port = int32(tmpPort)
+		}
+
+		if len(catalog) > 0 {
+			c.schema = catalog
 		}
 
 		c.group = newEPGroup(c.host+":"+strconv.Itoa(int(c.port)), []*ep{newEP(c.host, c.port)})
@@ -796,11 +884,12 @@ func (c *DmConnector) mergeConfigs(dsn string) error {
 
 	props.SetDiffProperties(GlobalProperties)
 
-	if props.GetBool(RwSeparateKey, false) {
+	if c.rwSeparate = int32(props.GetInt(RwSeparateKey, 0, 0, 5)); c.rwSeparate > RW_SEPARATE_OFF {
 		props.SetIfNotExist(LoginModeKey, strconv.Itoa(int(LOGIN_MODE_PRIMARY_ONLY)))
 		props.SetIfNotExist(LoginStatusKey, strconv.Itoa(int(SERVER_STATUS_OPEN)))
 
 		props.SetIfNotExist(DoSwitchKey, "true")
+
 	}
 
 	if err = c.setAttributes(props); err != nil {
@@ -825,10 +914,14 @@ func (c *DmConnector) remap(origin string, cfgStr string) string {
 }
 
 func (c *DmConnector) Connect(ctx context.Context) (driver.Conn, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	return c.filterChain.reset().DmConnectorConnect(c, ctx)
 }
 
 func (c *DmConnector) Driver() driver.Driver {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	return c.filterChain.reset().DmConnectorDriver(c)
 }
 
@@ -846,34 +939,28 @@ func (c *DmConnector) driver() *DmDriver {
 
 func (c *DmConnector) connectSingle(ctx context.Context) (*DmConnection, error) {
 	var err error
-	var dc *DmConnection
-	if c.reConnection == nil {
-		dc = &DmConnection{
-			closech: make(chan struct{}),
-		}
-		dc.dmConnector = c
-		dc.autoCommit = c.autoCommit
-		dc.createFilterChain(c, nil)
-
-		dc.objId = -1
-		dc.init()
-
-		dc.startWatcher()
-		if err = dc.watchCancel(ctx); err != nil {
-			return nil, err
-		}
-		defer dc.finish()
-	} else {
-		dc = c.reConnection
-		dc.reset()
+	var dc = &DmConnection{
+		closech:     make(chan struct{}),
+		dmConnector: c,
+		autoCommit:  c.autoCommit,
 	}
 
-	dc.Access, err = dm_build_344(dc)
+	dc.createFilterChain(c, nil)
+	dc.objId = -1
+	dc.init()
+
+	dc.Access, err = dm_build_426(ctx, dc)
 	if err != nil {
 		return nil, err
 	}
 
-	if err = dc.Access.dm_build_385(); err != nil {
+	dc.startWatcher()
+	if err = dc.watchCancel(ctx); err != nil {
+		return nil, err
+	}
+	defer dc.finish()
+
+	if err = dc.Access.dm_build_471(); err != nil {
 
 		if !dc.closed.IsSet() {
 			close(dc.closech)
@@ -886,8 +973,10 @@ func (c *DmConnector) connectSingle(ctx context.Context) (*DmConnection, error) 
 	}
 
 	if c.schema != "" {
-		_, err = dc.exec("set schema "+c.schema, nil)
+		_, err = dc.exec("set schema \""+util.StringUtil.ProcessDoubleQuoteOfName(c.schema)+"\"", nil)
 		if err != nil {
+
+			dc.cleanup()
 			return nil, err
 		}
 	}

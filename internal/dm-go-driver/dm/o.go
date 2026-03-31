@@ -5,6 +5,7 @@
 package dm
 
 import (
+	"database/sql/driver"
 	"math/big"
 	"reflect"
 	"strconv"
@@ -12,14 +13,15 @@ import (
 )
 
 const (
-	XDEC_MAX_PREC int = 38
+	XDEC_MAX_PREC int = 40
 	XDEC_SIZE         = 21
 
-	FLAG_ZERO     int = 0x80
-	FLAG_POSITIVE int = 0xC1
-	FLAG_NEGTIVE  int = 0x3E
-	EXP_MAX       int = 0xFF - 1 - FLAG_POSITIVE
-	EXP_MIN       int = FLAG_NEGTIVE + 1 - 0x7F
+	FLAG_ZERO        int = 0x80
+	FLAG_POSITIVE    int = 0xC1
+	FLAG_NEGTIVE     int = 0x3E
+	POSITIVE_EXP_MAX     = 0xff - FLAG_POSITIVE
+	EXP_MAX          int = 0xFF - 1 - FLAG_POSITIVE
+	EXP_MIN          int = FLAG_NEGTIVE + 1 - 0x7F
 
 	NUM_POSITIVE int = 1
 	NUM_NEGTIVE  int = 101
@@ -31,24 +33,31 @@ type DmDecimal struct {
 	prec   int
 	scale  int
 	digits string
+
+	Valid bool
 }
 
 func NewDecimalFromInt64(x int64) (*DmDecimal, error) {
 	return NewDecimalFromBigInt(big.NewInt(x))
 }
+
 func (d DmDecimal) ToInt64() int64 {
 	return d.ToBigInt().Int64()
 }
+
 func NewDecimalFromFloat64(x float64) (*DmDecimal, error) {
 	return NewDecimalFromBigFloat(big.NewFloat(x))
 }
+
 func (d DmDecimal) ToFloat64() float64 {
 	f, _ := d.ToBigFloat().Float64()
 	return f
 }
+
 func NewDecimalFromBigInt(bigInt *big.Int) (*DmDecimal, error) {
 	return newDecimal(bigInt, len(bigInt.String()), 0)
 }
+
 func (d DmDecimal) ToBigInt() *big.Int {
 	if d.isZero() {
 		return big.NewInt(0)
@@ -76,9 +85,11 @@ func (d DmDecimal) ToBigInt() *big.Int {
 	}
 	return i1
 }
+
 func NewDecimalFromBigFloat(bigFloat *big.Float) (*DmDecimal, error) {
 	return newDecimal(bigFloat, int(bigFloat.Prec()), int(bigFloat.Prec()))
 }
+
 func (d DmDecimal) ToBigFloat() *big.Float {
 	if d.isZero() {
 		return big.NewFloat(0.0)
@@ -124,7 +135,11 @@ func (d DmDecimal) String() string {
 	if d.weight > 0 {
 		digitsStr = digitsStr + strings.Repeat("0", d.weight)
 	} else if d.weight < 0 {
-		digitsStr = strings.Repeat("0", -d.weight+1) + digitsStr
+		if len(digitsStr) < -d.weight {
+			digitsStr = strings.Repeat("0", -d.weight-len(digitsStr)+1) + digitsStr
+		}
+		indexOfDot := len(digitsStr) + d.weight
+		digitsStr = digitsStr[:indexOfDot] + "." + digitsStr[indexOfDot:]
 	}
 
 	if digitsStr[0] == '0' && digitsStr[1] != '.' {
@@ -153,6 +168,8 @@ func (dest *DmDecimal) Scan(src interface{}) error {
 	switch src := src.(type) {
 	case nil:
 		*dest = *new(DmDecimal)
+
+		(*dest).Valid = false
 		return nil
 	case int, int8, int16, int32, int64:
 		d, err := NewDecimalFromInt64(reflect.ValueOf(src).Int())
@@ -163,6 +180,13 @@ func (dest *DmDecimal) Scan(src interface{}) error {
 		return nil
 	case uint, uint8, uint16, uint32, uint64:
 		d, err := NewDecimalFromBigInt(new(big.Int).SetUint64(reflect.ValueOf(src).Uint()))
+		if err != nil {
+			return err
+		}
+		*dest = *d
+		return nil
+	case float32, float64:
+		d, err := NewDecimalFromFloat64(reflect.ValueOf(src).Float())
 		if err != nil {
 			return err
 		}
@@ -183,10 +207,18 @@ func (dest *DmDecimal) Scan(src interface{}) error {
 	}
 }
 
+func (d DmDecimal) Value() (driver.Value, error) {
+	if !d.Valid {
+		return nil, nil
+	}
+	return d, nil
+}
+
 func newDecimal(dec interface{}, prec int, scale int) (*DmDecimal, error) {
 	d := &DmDecimal{
 		prec:  prec,
 		scale: scale,
+		Valid: true,
 	}
 	if isFloat(DECIMAL, scale) {
 		d.prec = getFloatPrec(prec)
@@ -288,7 +320,15 @@ func (d DmDecimal) encodeDecimal() ([]byte, error) {
 		return []byte{byte(FLAG_ZERO)}, nil
 	}
 	exp := (d.weight+len(d.digits))/2 - 1
-	if exp > EXP_MAX || exp < EXP_MIN {
+
+	var realExpMax int
+
+	if d.sign == NUM_POSITIVE {
+		realExpMax = POSITIVE_EXP_MAX
+	} else {
+		realExpMax = EXP_MAX
+	}
+	if exp > realExpMax || exp < EXP_MIN {
 		return nil, ECGO_DATA_TOO_LONG.throw()
 	}
 	validLen := len(d.digits)/2 + 1
@@ -346,6 +386,7 @@ func decodeDecimal(values []byte, prec int, scale int) (*DmDecimal, error) {
 		scale:  scale,
 		sign:   0,
 		weight: 0,
+		Valid:  true,
 	}
 	if values == nil || len(values) == 0 || len(values) > XDEC_SIZE {
 		return nil, ECGO_FATAL_ERROR.throw()
@@ -359,7 +400,7 @@ func decodeDecimal(values []byte, prec int, scale int) (*DmDecimal, error) {
 		decimal.sign = -1
 	}
 
-	var flag = int(Dm_build_1219.Dm_build_1339(values, 0))
+	var flag = int(Dm_build_1346.Dm_build_1466(values, 0))
 	var exp int
 	if decimal.sign > 0 {
 		exp = flag - FLAG_POSITIVE
@@ -401,4 +442,15 @@ func checkPrec(len int, prec int) error {
 
 func isOdd(val int) bool {
 	return val%2 != 0
+}
+
+func (d *DmDecimal) checkValid() error {
+	if !d.Valid {
+		return ECGO_IS_NULL.throw()
+	}
+	return nil
+}
+
+func (d *DmDecimal) GormDataType() string {
+	return "DECIMAL"
 }

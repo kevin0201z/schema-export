@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/schema-export/schema-export/internal/config"
+	"github.com/schema-export/schema-export/internal/database"
 	"github.com/schema-export/schema-export/internal/exporter"
 	"github.com/schema-export/schema-export/internal/inspector"
 	"github.com/schema-export/schema-export/internal/model"
@@ -48,8 +49,11 @@ func (c *ExportCommand) Run() error {
 		return fmt.Errorf("failed to create inspector: %w", err)
 	}
 	
+	// 创建带超时的 context
+	ctx, cancel := context.WithTimeout(context.Background(), database.DefaultExportTimeout)
+	defer cancel()
+	
 	// 连接数据库
-	ctx := context.Background()
 	if err := ins.Connect(ctx); err != nil {
 		return fmt.Errorf("failed to connect to database: %w", err)
 	}
@@ -85,14 +89,34 @@ func (c *ExportCommand) Run() error {
 	
 	// 获取完整表元数据
 	var fullTables []model.Table
+	var failedTables []string
 	for _, table := range tables {
+		// 检查 context 是否已取消
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("export cancelled: %w", ctx.Err())
+		default:
+		}
+		
 		fullTable, err := ins.GetTable(ctx, table.Name)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Warning: failed to get table %s: %v\n", table.Name, err)
+			failedTables = append(failedTables, table.Name)
 			continue
 		}
 		fullTables = append(fullTables, *fullTable)
 	}
+	
+	// 输出处理结果汇总
+	if len(failedTables) > 0 {
+		fmt.Printf("Warning: %d tables failed to process: %v\n", len(failedTables), failedTables)
+	}
+	
+	if len(fullTables) == 0 {
+		return fmt.Errorf("no tables were successfully processed")
+	}
+	
+	fmt.Printf("Successfully processed %d tables\n", len(fullTables))
 	
 	// 导出
 	for _, format := range c.Config.Export.Formats {

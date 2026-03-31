@@ -16,6 +16,35 @@ type Column struct {
 	Comment      string // 字段注释
 }
 
+// 预定义的类型集合，使用 map 提高查找效率
+var (
+	numericTypes = map[string]bool{
+		"INT":      true,
+		"INTEGER":  true,
+		"BIGINT":   true,
+		"SMALLINT": true,
+		"TINYINT":  true,
+		"DECIMAL":  true,
+		"NUMERIC":  true,
+		"FLOAT":    true,
+		"DOUBLE":   true,
+		"REAL":     true,
+		"NUMBER":   true,
+	}
+
+	stringTypes = map[string]bool{
+		"VARCHAR":    true,
+		"VARCHAR2":   true,
+		"CHAR":       true,
+		"NCHAR":      true,
+		"NVARCHAR":   true,
+		"NVARCHAR2":  true,
+		"TEXT":       true,
+		"CLOB":       true,
+		"NCLOB":      true,
+	}
+)
+
 // GetFullDataType 获取完整数据类型（包含长度/精度）
 func (c *Column) GetFullDataType() string {
 	dt := c.DataType
@@ -33,24 +62,10 @@ func (c *Column) GetFullDataType() string {
 
 // IsNumeric 是否为数值类型
 func (c *Column) IsNumeric() bool {
-	numericTypes := []string{"INT", "INTEGER", "BIGINT", "SMALLINT", "TINYINT", 
-		"DECIMAL", "NUMERIC", "FLOAT", "DOUBLE", "REAL", "NUMBER"}
-	for _, t := range numericTypes {
-		if c.DataType == t {
-			return true
-		}
-	}
-	return false
+	return numericTypes[c.DataType]
 }
 
 // IsString 是否为字符串类型
 func (c *Column) IsString() bool {
-	stringTypes := []string{"VARCHAR", "VARCHAR2", "CHAR", "NCHAR", "NVARCHAR", 
-		"NVARCHAR2", "TEXT", "CLOB", "NCLOB"}
-	for _, t := range stringTypes {
-		if c.DataType == t {
-			return true
-		}
-	}
-	return false
+	return stringTypes[c.DataType]
 }

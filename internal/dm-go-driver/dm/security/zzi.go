@@ -8,25 +8,18 @@ package security
 import (
 	"crypto/tls"
 	"errors"
-	"flag"
 	"net"
-	"os"
+	"sync"
 )
 
-var dmHome = flag.String("DM_HOME", "", "Where DMDB installed")
+//var dmHome = flag.String("DM_HOME", "", "Where DMDB installed")
+var flagLock = sync.Mutex{}
 
-func NewTLSFromTCP(conn *net.TCPConn, sslCertPath string, sslKeyPath string, user string) (*tls.Conn, error) {
+func NewTLSFromTCP(conn net.Conn, sslCertPath string, sslKeyPath string, user string) (*tls.Conn, error) {
 	if sslCertPath == "" && sslKeyPath == "" {
-		flag.Parse()
-		separator := string(os.PathSeparator)
-		if *dmHome != "" {
-			sslCertPath = *dmHome + separator + "bin" + separator + "client_ssl" + separator +
-				user + separator + "client-cert.pem"
-			sslKeyPath = *dmHome + separator + "bin" + separator + "client_ssl" + separator +
-				user + separator + "client-key.pem"
-		} else {
-			return nil, errors.New("sslCertPath and sslKeyPath can not be empty!")
-		}
+		// 用户必须手动指定ssl文件和签名(.cert文件)
+		return nil, errors.New("sslCertPath and sslKeyPath can not be empty!")
+
 	}
 	cer, err := tls.LoadX509KeyPair(sslCertPath, sslKeyPath)
 	if err != nil {
@@ -34,7 +27,7 @@ func NewTLSFromTCP(conn *net.TCPConn, sslCertPath string, sslKeyPath string, use
 	}
 	conf := &tls.Config{
 		InsecureSkipVerify: true,
-		Certificates: []tls.Certificate{cer},
+		Certificates:       []tls.Certificate{cer},
 	}
 	tlsConn := tls.Client(conn, conf)
 	if err := tlsConn.Handshake(); err != nil {

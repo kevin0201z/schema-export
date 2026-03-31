@@ -9,6 +9,15 @@ import (
 	"github.com/schema-export/schema-export/internal/inspector"
 )
 
+const (
+	DefaultPingTimeout      = 10 * time.Second
+	DefaultTestTimeout      = 5 * time.Second
+	DefaultExportTimeout    = 30 * time.Minute
+	DefaultMaxOpenConns     = 10
+	DefaultMaxIdleConns     = 5
+	DefaultConnMaxLifetime  = 30 * time.Minute
+)
+
 // BaseInspector 基础 Inspector 实现
 type BaseInspector struct {
 	config inspector.ConnectionConfig
@@ -41,7 +50,7 @@ func (b *BaseInspector) TestConnection(ctx context.Context) error {
 		return fmt.Errorf("database not connected")
 	}
 	
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, DefaultTestTimeout)
 	defer cancel()
 	
 	return b.db.PingContext(ctx)

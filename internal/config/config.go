@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"regexp"
 	"strings"
@@ -128,12 +129,12 @@ func (c *Config) Validate() error {
 func extractSchemaFromDSN(dsn string) string {
 	// 支持格式: dm://user:password@host:port?schema=SCHEMA_NAME
 	// 或: dm://user:password@host:port?schema=SCHEMA_NAME&other=params
-	schemaRegex := regexp.MustCompile(`[?&]schema=([^&]+)`)
-	matches := schemaRegex.FindStringSubmatch(dsn)
-	if len(matches) > 1 {
-		return matches[1]
+	u, err := url.Parse(dsn)
+	if err != nil {
+		return ""
 	}
-	return ""
+	schema := u.Query().Get("schema")
+	return schema
 }
 
 // DefaultConfig 返回默认配置

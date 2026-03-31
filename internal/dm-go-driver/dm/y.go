@@ -7,10 +7,11 @@ package dm
 
 import (
 	"bytes"
-	"dm/util"
 	"math/rand"
 	"sync"
 	"time"
+
+	"dm/util"
 )
 
 /**
@@ -42,7 +43,7 @@ func newEPGroup(name string, serverList []*ep) *epGroup {
 		g.epStartPos = -1
 	} else {
 		// 保证进程间均衡，起始位置采用随机值
-		g.epStartPos = rand.Int31n(int32(len(serverList))) -1
+		g.epStartPos = rand.Int31n(int32(len(serverList))) - 1
 	}
 	return g
 }
@@ -51,16 +52,16 @@ func (g *epGroup) connect(connector *DmConnector) (*DmConnection, error) {
 	var dbSelector = g.getEPSelector(connector)
 	var ex error = nil
 	// 如果配置了loginMode的主、备等优先策略，而未找到最高优先级的节点时持续循环switchtimes次，如果最终还是没有找到最高优先级则选择次优先级的
-	// 如果只有一个节点，一轮即可决定是否连接；多个节点时保证switchTimes轮尝试，最后一轮决定用哪个节点（由于节点已经按照模式优先级排序，最后一轮理论上就是连第一个节点）
+	// 如果只有一个节点，无需switchTimes+1；多个节点时保证switchTimes轮尝试，最后一轮决定用哪个节点（由于节点已经按照模式优先级排序，最后一轮理论上就是连第一个节点）
 	var cycleCount int32
 	if len(g.epList) == 1 {
-		cycleCount = 1
+		cycleCount = connector.switchTimes
 	} else {
 		cycleCount = connector.switchTimes + 1
 	}
 	for i := int32(0); i < cycleCount; i++ {
 		// 循环了一遍，如果没有符合要求的, 重新排序, 再尝试连接
-		conn, err := g.traverseServerList(connector, dbSelector, i == 0, i == cycleCount - 1)
+		conn, err := g.traverseServerList(connector, dbSelector, i == 0, i == cycleCount-1)
 		if err != nil {
 			ex = err
 			time.Sleep(time.Duration(connector.switchInterval) * time.Millisecond)
@@ -81,7 +82,7 @@ func (g *epGroup) getEPSelector(connector *DmConnector) *epSelector {
 		defer g.lock.Unlock()
 		g.epStartPos = (g.epStartPos + 1) % serverCount
 		for i := int32(0); i < serverCount; i++ {
-			sortEPs[i] = g.epList[(i + g.epStartPos) % serverCount]
+			sortEPs[i] = g.epList[(i+g.epStartPos)%serverCount]
 		}
 		return newEPSelector(sortEPs)
 	}
@@ -141,7 +142,7 @@ func (g *epGroup) traverseServerList(connector *DmConnector, epSelector *epSelec
 		return conn, nil
 	}
 	if ex != nil {
-		return nil ,ex
+		return nil, ex
 	}
 	return nil, ECGO_COMMUNITION_ERROR.addDetail(errorMsg.String()).throw()
 }

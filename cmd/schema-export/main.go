@@ -10,6 +10,7 @@ import (
 	// 导入驱动注册
 	_ "github.com/schema-export/schema-export/internal/database/dm"
 	_ "github.com/schema-export/schema-export/internal/database/oracle"
+	_ "github.com/schema-export/schema-export/internal/database/sqlserver"
 	
 	// 导入导出器注册
 	_ "github.com/schema-export/schema-export/internal/exporter/markdown"
@@ -58,7 +59,7 @@ func newExportCmd() *cobra.Command {
 	}
 	
 	// 数据库连接参数
-	exportCmd.Flags().StringVar(&cmd.Config.Database.Type, "type", "dm", "Database type (dm, oracle, mysql, postgres)")
+	exportCmd.Flags().StringVar(&cmd.Config.Database.Type, "type", "dm", "Database type (dm, oracle, sqlserver, mysql, postgres)")
 	exportCmd.Flags().StringVar(&cmd.Config.Database.Host, "host", "", "Database host")
 	exportCmd.Flags().IntVar(&cmd.Config.Database.Port, "port", 0, "Database port")
 	exportCmd.Flags().StringVar(&cmd.Config.Database.Database, "database", "", "Database name")

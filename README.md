@@ -6,7 +6,7 @@
 
 ## 功能特性
 
-- **多数据库支持**：达梦（DM）、Oracle、MySQL、PostgreSQL（可扩展）
+- **多数据库支持**：达梦（DM）、Oracle、SQL Server、MySQL、PostgreSQL（可扩展）
 - **多种导出格式**：Markdown、SQL DDL
 - **灵活的导出模式**：单文件或按表分文件导出
 - **表过滤功能**：包含/排除表、正则表达式匹配
@@ -59,6 +59,16 @@ GOOS=darwin GOARCH=amd64 go build -o schema-export-darwin ./cmd/schema-export
   --database ORCL \
   --output ./docs
 
+# 导出 SQL Server 数据库
+./schema-export export \
+  --type sqlserver \
+  --host localhost \
+  --port 1433 \
+  --username sa \
+  --password mypassword \
+  --database mydb \
+  --output ./docs
+
 # 导出指定表
 ./schema-export export \
   --type dm \
@@ -104,11 +114,17 @@ GOOS=darwin GOARCH=amd64 go build -o schema-export-darwin ./cmd/schema-export
   --dsn "dm://SYSDBA:password@localhost:5236?schema=sc" \
   --output ./docs
 
-# Oracle DSN 格式（纯 Go 驱动，无需安装 Oracle Client）
+# Oracle DSN 格式
 ./schema-export export \
   --type oracle \
   --dsn "oracle://scott:tiger@localhost:1521/ORCL" \
   --schema SCHEMA_NAME \
+  --output ./docs
+
+# SQL Server DSN 格式
+./schema-export export \
+  --type sqlserver \
+  --dsn "sqlserver://sa:mypassword@localhost:1433?database=mydb" \
   --output ./docs
 ```
 
@@ -167,7 +183,7 @@ export EXPORT_SPLIT=true
 
 | 参数           | 默认值      | 说明                              |
 | ------------ | -------- | ------------------------------- |
-| `--type`     | dm       | 数据库类型（dm、oracle、mysql、postgres） |
+| `--type`     | dm       | 数据库类型（dm、oracle、sqlserver、mysql、postgres） |
 | `--host`     | <br />   | 数据库主机                           |
 | `--port`     | 0        | 数据库端口                           |
 | `--database` | <br />   | 数据库名                            |
@@ -450,9 +466,9 @@ ALTER TABLE orders ADD CONSTRAINT fk_order_user FOREIGN KEY (user_id) REFERENCES
 | ---------- | ------ | --------------------- |
 | 达梦（DM）     | ✅ 已支持  | dm-go-driver（纯 Go 驱动） |
 | Oracle     | ✅ 已支持  | go-ora（纯 Go 驱动）       |
+| SQL Server | ✅ 已支持  | go-mssqldb（纯 Go 驱动）   |
 | MySQL      | 🚧 计划中 | -                     |
 | PostgreSQL | 🚧 计划中 | -                     |
-| SQL Server | 🚧 计划中 | -                     |
 | SQLite     | 🚧 计划中 | -                     |
 
 ## 架构
@@ -470,6 +486,8 @@ schema-export/
 │   │   │   └── inspector.go    # 达梦数据库 Inspector 实现
 │   │   ├── oracle/             # Oracle 驱动
 │   │   │   └── inspector.go    # Oracle 数据库 Inspector 实现
+│   │   ├── sqlserver/          # SQL Server 驱动
+│   │   │   └── inspector.go    # SQL Server 数据库 Inspector 实现
 │   │   └── base.go             # 基础 Inspector，提供通用功能
 │   ├── inspector/              # Inspector 接口
 │   │   └── interface.go        # Inspector 接口定义
@@ -503,7 +521,7 @@ schema-export/
 | **CLI** | 命令行参数解析、命令路由 | `cmd/schema-export/main.go`, `internal/cli/` |
 | **Config** | 配置管理、环境变量、表过滤 | `internal/config/` |
 | **Inspector** | 数据库元数据查询接口 | `internal/inspector/interface.go` |
-| **Database** | 各数据库 Inspector 实现 | `internal/database/dm/`, `internal/database/oracle/` |
+| **Database** | 各数据库 Inspector 实现 | `internal/database/dm/`, `internal/database/oracle/`, `internal/database/sqlserver/` |
 | **Model** | 数据模型定义 | `internal/model/` |
 | **Exporter** | 导出格式实现 | `internal/exporter/markdown/`, `internal/exporter/sql/` |
 

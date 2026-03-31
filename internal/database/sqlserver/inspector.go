@@ -409,3 +409,16 @@ func (f *Factory) GetType() string {
 func init() {
 	inspector.Register("sqlserver", &Factory{})
 }
+
+// Forwarding methods to ensure embedded BaseInspector methods are accessible
+func (i *Inspector) SetDB(db *sql.DB) {
+	i.BaseInspector.SetDB(db)
+}
+
+func (i *Inspector) GetDB() *sql.DB {
+	return i.BaseInspector.GetDB()
+}
+
+func (i *Inspector) GetConfig() inspector.ConnectionConfig {
+	return i.BaseInspector.GetConfig()
+}

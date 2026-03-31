@@ -100,3 +100,16 @@ func (f *Factory) GetType() string {
 func init() {
 	inspector.Register("oracle", &Factory{})
 }
+
+// Forwarding methods to ensure embedded methods are available on *Inspector
+func (i *Inspector) SetDB(db *sql.DB) {
+	i.OracleCompatibleInspector.SetDB(db)
+}
+
+func (i *Inspector) GetDB() *sql.DB {
+	return i.OracleCompatibleInspector.GetDB()
+}
+
+func (i *Inspector) GetConfig() inspector.ConnectionConfig {
+	return i.OracleCompatibleInspector.GetConfig()
+}

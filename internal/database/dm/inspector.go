@@ -91,3 +91,17 @@ func (f *Factory) GetType() string {
 func init() {
 	inspector.Register("dm", &Factory{})
 }
+
+// Forwarding methods to satisfy analyzers and method promotion
+// These simply delegate to the embedded OracleCompatibleInspector/BaseInspector.
+func (i *Inspector) SetDB(db *sql.DB) {
+	i.OracleCompatibleInspector.SetDB(db)
+}
+
+func (i *Inspector) GetDB() *sql.DB {
+	return i.OracleCompatibleInspector.GetDB()
+}
+
+func (i *Inspector) GetConfig() inspector.ConnectionConfig {
+	return i.OracleCompatibleInspector.GetConfig()
+}

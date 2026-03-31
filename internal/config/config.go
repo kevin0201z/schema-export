@@ -99,7 +99,7 @@ func (c *Config) Validate() error {
 	if c.Database.Type == "" {
 		return fmt.Errorf("database type is required")
 	}
-	
+
 	if c.Database.DSN == "" {
 		if c.Database.Host == "" {
 			return fmt.Errorf("database host or DSN is required")
@@ -113,15 +113,15 @@ func (c *Config) Validate() error {
 			c.Database.Schema = extractSchemaFromDSN(c.Database.DSN)
 		}
 	}
-	
+
 	if len(c.Export.Formats) == 0 {
 		c.Export.Formats = []string{"markdown"}
 	}
-	
+
 	if c.Export.OutputDir == "" {
 		c.Export.OutputDir = "./output"
 	}
-	
+
 	return nil
 }
 
@@ -165,7 +165,7 @@ func NewTableFilter(include, exclude, patterns []string) (*TableFilter, error) {
 		Include: include,
 		Exclude: exclude,
 	}
-	
+
 	for _, pattern := range patterns {
 		re, err := regexp.Compile(pattern)
 		if err != nil {
@@ -173,7 +173,7 @@ func NewTableFilter(include, exclude, patterns []string) (*TableFilter, error) {
 		}
 		filter.Patterns = append(filter.Patterns, re)
 	}
-	
+
 	return filter, nil
 }
 
@@ -192,14 +192,14 @@ func (f *TableFilter) ShouldInclude(tableName string) bool {
 			return false
 		}
 	}
-	
+
 	// 检查排除列表
 	for _, name := range f.Exclude {
 		if strings.EqualFold(name, tableName) {
 			return false
 		}
 	}
-	
+
 	// 检查正则模式
 	if len(f.Patterns) > 0 {
 		matched := false
@@ -213,7 +213,7 @@ func (f *TableFilter) ShouldInclude(tableName string) bool {
 			return false
 		}
 	}
-	
+
 	return true
 }
 

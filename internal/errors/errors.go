@@ -8,25 +8,25 @@ import (
 // 通用错误类型
 var (
 	// 连接相关错误
-	ErrConnectionFailed    = errors.New("database connection failed")
-	ErrConnectionTimeout   = errors.New("database connection timeout")
-	ErrInvalidDSN          = errors.New("invalid database DSN")
-	ErrDriverNotFound      = errors.New("database driver not found")
+	ErrConnectionFailed  = errors.New("database connection failed")
+	ErrConnectionTimeout = errors.New("database connection timeout")
+	ErrInvalidDSN        = errors.New("invalid database DSN")
+	ErrDriverNotFound    = errors.New("database driver not found")
 
 	// 查询相关错误
-	ErrQueryFailed         = errors.New("query execution failed")
-	ErrTableNotFound       = errors.New("table not found")
-	ErrColumnNotFound      = errors.New("column not found")
-	ErrSchemaNotFound      = errors.New("schema not found")
+	ErrQueryFailed    = errors.New("query execution failed")
+	ErrTableNotFound  = errors.New("table not found")
+	ErrColumnNotFound = errors.New("column not found")
+	ErrSchemaNotFound = errors.New("schema not found")
 
 	// 导出相关错误
-	ErrExportFailed        = errors.New("export failed")
-	ErrInvalidFormat       = errors.New("invalid export format")
-	ErrFileCreateFailed    = errors.New("failed to create output file")
+	ErrExportFailed          = errors.New("export failed")
+	ErrInvalidFormat         = errors.New("invalid export format")
+	ErrFileCreateFailed      = errors.New("failed to create output file")
 	ErrDirectoryCreateFailed = errors.New("failed to create output directory")
 
 	// 配置相关错误
-	ErrInvalidConfig       = errors.New("invalid configuration")
+	ErrInvalidConfig        = errors.New("invalid configuration")
 	ErrMissingRequiredParam = errors.New("missing required parameter")
 )
 

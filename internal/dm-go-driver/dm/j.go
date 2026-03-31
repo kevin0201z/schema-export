@@ -135,7 +135,7 @@ func (da *DmArray) GetBaseTypeName() (string, error) {
 // 获取Array对象的go数组对象
 func (da *DmArray) GetArray() (interface{}, error) {
 	if da.m_arrData == nil || len(da.m_arrData) <= 0 {
-		return nil, nil;
+		return nil, nil
 	}
 
 	return TypeDataSV.toJavaArray(da, 0, len(da.m_arrData), da.m_arrDesc.getItemDesc().getDType())

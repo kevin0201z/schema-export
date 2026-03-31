@@ -14,7 +14,7 @@ import (
 type rwFilter struct {
 }
 
-//DmDriver
+// DmDriver
 func (rwf *rwFilter) DmDriverOpen(filterChain *filterChain, d *DmDriver, dsn string) (*DmConnection, error) {
 	return filterChain.DmDriverOpen(d, dsn)
 }
@@ -23,7 +23,7 @@ func (rwf *rwFilter) DmDriverOpenConnector(filterChain *filterChain, d *DmDriver
 	return filterChain.DmDriverOpenConnector(d, dsn)
 }
 
-//DmConnector
+// DmConnector
 func (rwf *rwFilter) DmConnectorConnect(filterChain *filterChain, c *DmConnector, ctx context.Context) (*DmConnection, error) {
 	return RWUtil.connect(c, ctx)
 }
@@ -32,7 +32,7 @@ func (rwf *rwFilter) DmConnectorDriver(filterChain *filterChain, c *DmConnector)
 	return filterChain.DmConnectorDriver(c)
 }
 
-//DmConnection
+// DmConnection
 func (rwf *rwFilter) DmConnectionBegin(filterChain *filterChain, c *DmConnection) (*DmConnection, error) {
 	if RWUtil.isStandbyAlive(c) {
 		_, err := c.rwInfo.connStandby.begin()
@@ -191,7 +191,7 @@ func (rwf *rwFilter) DmConnectionCheckNamedValue(filterChain *filterChain, c *Dm
 	return filterChain.DmConnectionCheckNamedValue(c, nv)
 }
 
-//DmStatement
+// DmStatement
 func (rwf *rwFilter) DmStatementClose(filterChain *filterChain, s *DmStatement) error {
 	if RWUtil.isStandbyStatementValid(s) {
 		err := s.rwInfo.stmtStandby.close()
@@ -259,7 +259,7 @@ func (rwf *rwFilter) DmStatementCheckNamedValue(filterChain *filterChain, s *DmS
 	return filterChain.DmStatementCheckNamedValue(s, nv)
 }
 
-//DmResult
+// DmResult
 func (rwf *rwFilter) DmResultLastInsertId(filterChain *filterChain, r *DmResult) (int64, error) {
 	return filterChain.DmResultLastInsertId(r)
 }
@@ -268,7 +268,7 @@ func (rwf *rwFilter) DmResultRowsAffected(filterChain *filterChain, r *DmResult)
 	return filterChain.DmResultRowsAffected(r)
 }
 
-//DmRows
+// DmRows
 func (rwf *rwFilter) DmRowsColumns(filterChain *filterChain, r *DmRows) []string {
 	return filterChain.DmRowsColumns(r)
 }

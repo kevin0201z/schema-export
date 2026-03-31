@@ -17,7 +17,7 @@ import (
 type statFilter struct {
 }
 
-//DmDriver
+// DmDriver
 func (sf *statFilter) DmDriverOpen(filterChain *filterChain, d *DmDriver, dsn string) (*DmConnection, error) {
 	conn, err := filterChain.DmDriverOpen(d, dsn)
 	if err != nil {
@@ -33,7 +33,7 @@ func (sf *statFilter) DmDriverOpenConnector(filterChain *filterChain, d *DmDrive
 	return filterChain.DmDriverOpenConnector(d, dsn)
 }
 
-//DmConnector
+// DmConnector
 func (sf *statFilter) DmConnectorConnect(filterChain *filterChain, c *DmConnector, ctx context.Context) (*DmConnection, error) {
 	conn, err := filterChain.DmConnectorConnect(c, ctx)
 	if err != nil {
@@ -49,7 +49,7 @@ func (sf *statFilter) DmConnectorDriver(filterChain *filterChain, c *DmConnector
 	return filterChain.DmConnectorDriver(c)
 }
 
-//DmConnection
+// DmConnection
 func (sf *statFilter) DmConnectionBegin(filterChain *filterChain, c *DmConnection) (*DmConnection, error) {
 	return filterChain.DmConnectionBegin(c)
 }
@@ -159,7 +159,7 @@ func (sf *statFilter) DmConnectionCheckNamedValue(filterChain *filterChain, c *D
 	return filterChain.DmConnectionCheckNamedValue(c, nv)
 }
 
-//DmStatement
+// DmStatement
 func (sf *statFilter) DmStatementClose(filterChain *filterChain, s *DmStatement) error {
 	if !s.closed {
 		statementCloseBefore(s)
@@ -219,7 +219,7 @@ func (sf *statFilter) DmStatementCheckNamedValue(filterChain *filterChain, s *Dm
 	return filterChain.DmStatementCheckNamedValue(s, nv)
 }
 
-//DmResult
+// DmResult
 func (sf *statFilter) DmResultLastInsertId(filterChain *filterChain, r *DmResult) (int64, error) {
 	return filterChain.DmResultLastInsertId(r)
 }
@@ -228,7 +228,7 @@ func (sf *statFilter) DmResultRowsAffected(filterChain *filterChain, r *DmResult
 	return filterChain.DmResultRowsAffected(r)
 }
 
-//DmRows
+// DmRows
 func (sf *statFilter) DmRowsColumns(filterChain *filterChain, r *DmRows) []string {
 	return filterChain.DmRowsColumns(r)
 }

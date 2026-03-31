@@ -7,6 +7,67 @@ on:
     branches: [ main, master ]
 
 jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        go-version: [1.25]
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Setup Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: ${{ matrix.go-version }}
+
+    - name: Cache Go modules
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cache/go-build
+          ${{ github.workspace }}/.cache/go-build
+          ${{ github.workspace }}/pkg/mod
+        key: ${{ runner.os }}-go-${{ matrix.go-version }}-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-${{ matrix.go-version }}-
+
+    - name: Show go info
+      run: |
+        go version
+        go env
+
+    - name: Run gofmt (check)
+      run: |
+        set -e
+        out=$(gofmt -s -l .)
+        if [ -n "$out" ]; then
+          echo "gofmt found files that need formatting:";
+          echo "$out";
+          exit 1;
+        fi
+
+    - name: Run go vet
+      run: go vet ./...
+
+    - name: Run unit tests
+      run: go test ./...
+
+    - name: Run golangci-lint
+      uses: golangci/golangci-lint-action@v3
+      with:
+        version: v1.59.0
+        args: --timeout 3m
+name: CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
   test:
     runs-on: ubuntu-latest
     strategy:

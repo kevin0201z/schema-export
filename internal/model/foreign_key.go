@@ -4,12 +4,12 @@ import "fmt"
 
 // ForeignKey 外键元数据
 type ForeignKey struct {
-	Name           string // 外键名
-	Column         string // 源字段
-	RefTable       string // 目标表
-	RefColumn      string // 目标字段
-	OnDelete       string // 删除级联规则
-	OnUpdate       string // 更新级联规则
+	Name      string // 外键名
+	Column    string // 源字段
+	RefTable  string // 目标表
+	RefColumn string // 目标字段
+	OnDelete  string // 删除级联规则
+	OnUpdate  string // 更新级联规则
 }
 
 // GetReferenceString 获取引用描述字符串

@@ -793,7 +793,7 @@ func (OracleDateFormat *oracleDateFormat) analysePattern(pattern string) ([]inte
 						if i == len(subPattern) {
 							subPattern = ""
 						} else {
-							subPattern = subPattern[i:len(subPattern)]
+							subPattern = subPattern[i:]
 						}
 						break
 					}
@@ -866,7 +866,7 @@ func (OracleDateFormat *oracleDateFormat) getFormatElement(word string) (element
 		var count int64
 		var err error
 		if numIndex < len(word) {
-			count, err = strconv.ParseInt(word[numIndex:len(word)], 10, 32)
+			count, err = strconv.ParseInt(word[numIndex:], 10, 32)
 			if err != nil {
 				return nil, err
 			}

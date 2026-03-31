@@ -15,7 +15,7 @@ type PlaceholderType int
 
 const (
 	PlaceholderQuestion PlaceholderType = iota // ? 占位符 (DM, MySQL)
-	PlaceholderColon                            // :1, :2 占位符 (Oracle)
+	PlaceholderColon                           // :1, :2 占位符 (Oracle)
 )
 
 // Oracle 兼容数据库 SQL 查询常量
@@ -141,8 +141,8 @@ const (
 	`
 
 	// 表注释查询
-	queryTableCommentAllSQL   = `SELECT COMMENTS FROM ALL_TAB_COMMENTS WHERE TABLE_NAME = %s AND OWNER = %s`
-	queryTableCommentUserSQL  = `SELECT COMMENTS FROM USER_TAB_COMMENTS WHERE TABLE_NAME = %s`
+	queryTableCommentAllSQL  = `SELECT COMMENTS FROM ALL_TAB_COMMENTS WHERE TABLE_NAME = %s AND OWNER = %s`
+	queryTableCommentUserSQL = `SELECT COMMENTS FROM USER_TAB_COMMENTS WHERE TABLE_NAME = %s`
 )
 
 // OracleCompatibleInspector Oracle 兼容数据库 Inspector 基础实现

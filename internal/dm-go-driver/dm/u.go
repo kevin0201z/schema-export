@@ -173,7 +173,7 @@ func (rpv rsPoolValue) getResultSet(stmt *DmStatement) *innerRows {
 
 	if stmt.maxRows > 0 && stmt.maxRows < int64(totalRows) {
 		destDatas = make([][][]byte, stmt.maxRows)
-		copy(destDatas[:len(destDatas)], rpv.execInfo.rsDatas[:len(destDatas)])
+		copy(destDatas[:], rpv.execInfo.rsDatas[:len(destDatas)])
 	}
 
 	rs := newLocalInnerRows(stmt, stmt.columns, destDatas)
@@ -1026,7 +1026,7 @@ func callValuerValue(vr driver.Valuer) (v driver.Value, err error) {
 func namedValueToValue(stmt *DmStatement, named []driver.NamedValue) ([]driver.Value, error) {
 
 	dargs := make([]driver.Value, stmt.paramCount)
-	for i, _ := range dargs {
+	for i := range dargs {
 		found := false
 		for _, nv := range named {
 			if nv.Name != "" && strings.ToUpper(nv.Name) == strings.ToUpper(stmt.serverParams[i].name) {

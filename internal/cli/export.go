@@ -30,50 +30,50 @@ func NewExportCommand() *ExportCommand {
 func (c *ExportCommand) Run() error {
 	// 加载环境变量配置
 	c.Config.LoadFromEnv()
-	
+
 	// 验证配置
 	if err := c.Config.Validate(); err != nil {
 		return fmt.Errorf("configuration error: %w", err)
 	}
-	
+
 	// 获取 Inspector 工厂
 	factory, ok := inspector.GetFactory(c.Config.Database.Type)
 	if !ok {
 		return fmt.Errorf("unsupported database type: %s", c.Config.Database.Type)
 	}
-	
+
 	// 创建 Inspector
 	connConfig := c.Config.Database.ToConnectionConfig()
 	ins, err := factory.Create(connConfig)
 	if err != nil {
 		return fmt.Errorf("failed to create inspector: %w", err)
 	}
-	
+
 	// 创建带超时的 context
 	ctx, cancel := context.WithTimeout(context.Background(), database.DefaultExportTimeout)
 	defer cancel()
-	
+
 	// 连接数据库
 	if err := ins.Connect(ctx); err != nil {
 		return fmt.Errorf("failed to connect to database: %w", err)
 	}
 	defer ins.Close()
-	
+
 	// 测试连接
 	if err := ins.TestConnection(ctx); err != nil {
 		return fmt.Errorf("database connection test failed: %w", err)
 	}
-	
+
 	fmt.Printf("Connected to %s database\n", c.Config.Database.Type)
-	
+
 	// 获取所有表
 	tables, err := ins.GetTables(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get tables: %w", err)
 	}
-	
+
 	fmt.Printf("Found %d tables\n", len(tables))
-	
+
 	// 应用表过滤器
 	filter, err := config.NewTableFilter(
 		c.Config.Export.Tables,
@@ -83,10 +83,10 @@ func (c *ExportCommand) Run() error {
 	if err != nil {
 		return fmt.Errorf("invalid table filter: %w", err)
 	}
-	
+
 	tables = filter.FilterTables(tables)
 	fmt.Printf("Filtered to %d tables\n", len(tables))
-	
+
 	// 获取完整表元数据
 	var fullTables []model.Table
 	var failedTables []string
@@ -97,7 +97,7 @@ func (c *ExportCommand) Run() error {
 			return fmt.Errorf("export cancelled: %w", ctx.Err())
 		default:
 		}
-		
+
 		fullTable, err := ins.GetTable(ctx, table.Name)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Warning: failed to get table %s: %v\n", table.Name, err)
@@ -106,18 +106,18 @@ func (c *ExportCommand) Run() error {
 		}
 		fullTables = append(fullTables, *fullTable)
 	}
-	
+
 	// 输出处理结果汇总
 	if len(failedTables) > 0 {
 		fmt.Printf("Warning: %d tables failed to process: %v\n", len(failedTables), failedTables)
 	}
-	
+
 	if len(fullTables) == 0 {
 		return fmt.Errorf("no tables were successfully processed")
 	}
-	
+
 	fmt.Printf("Successfully processed %d tables\n", len(fullTables))
-	
+
 	// 导出
 	for _, format := range c.Config.Export.Formats {
 		if err := c.exportFormat(fullTables, format); err != nil {
@@ -125,7 +125,7 @@ func (c *ExportCommand) Run() error {
 			continue
 		}
 	}
-	
+
 	fmt.Println("Export completed successfully!")
 	return nil
 }
@@ -136,26 +136,26 @@ func (c *ExportCommand) exportFormat(tables []model.Table, format string) error 
 	if !ok {
 		return fmt.Errorf("unsupported export format: %s", format)
 	}
-	
+
 	exp, err := factory.Create()
 	if err != nil {
 		return fmt.Errorf("failed to create exporter: %w", err)
 	}
-	
+
 	// 解析输出路径
 	outputPath := c.Config.Export.OutputDir
 	outputDir, fileName := parseOutputPath(outputPath, format)
-	
+
 	options := exporter.ExportOptions{
 		OutputDir:  outputDir,
 		FileName:   fileName,
 		SplitFiles: c.Config.Export.SplitFiles,
 	}
-	
+
 	if err := exp.Export(tables, options); err != nil {
 		return fmt.Errorf("export failed: %w", err)
 	}
-	
+
 	fmt.Printf("Exported to %s format\n", format)
 	return nil
 }
@@ -165,7 +165,7 @@ func parseOutputPath(outputPath string, format string) (dir string, fileName str
 	if outputPath == "" {
 		return "./output", ""
 	}
-	
+
 	// 检查是否有文件扩展名
 	ext := filepath.Ext(outputPath)
 	if ext != "" {
@@ -183,7 +183,7 @@ func parseOutputPath(outputPath string, format string) (dir string, fileName str
 		dir = outputPath
 		fileName = ""
 	}
-	
+
 	return dir, fileName
 }
 

@@ -4,14 +4,14 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/spf13/cobra"
 	"github.com/schema-export/schema-export/internal/cli"
+	"github.com/spf13/cobra"
 
 	// 导入驱动注册
 	_ "github.com/schema-export/schema-export/internal/database/dm"
 	_ "github.com/schema-export/schema-export/internal/database/oracle"
 	_ "github.com/schema-export/schema-export/internal/database/sqlserver"
-	
+
 	// 导入导出器注册
 	_ "github.com/schema-export/schema-export/internal/exporter/markdown"
 	_ "github.com/schema-export/schema-export/internal/exporter/sql"
@@ -39,16 +39,16 @@ func newRootCmd() *cobra.Command {
 Generate database structure documentation in Markdown and SQL DDL formats.`,
 		Version: fmt.Sprintf("%s (commit: %s, built: %s)", version, commit, date),
 	}
-	
+
 	rootCmd.AddCommand(newExportCmd())
 	rootCmd.AddCommand(newVersionCmd())
-	
+
 	return rootCmd
 }
 
 func newExportCmd() *cobra.Command {
 	cmd := cli.NewExportCommand()
-	
+
 	exportCmd := &cobra.Command{
 		Use:   "export",
 		Short: "Export database schema",
@@ -57,7 +57,7 @@ func newExportCmd() *cobra.Command {
 			return cmd.Run()
 		},
 	}
-	
+
 	// 数据库连接参数
 	exportCmd.Flags().StringVar(&cmd.Config.Database.Type, "type", "dm", "Database type (dm, oracle, sqlserver, mysql, postgres)")
 	exportCmd.Flags().StringVar(&cmd.Config.Database.Host, "host", "", "Database host")
@@ -67,7 +67,7 @@ func newExportCmd() *cobra.Command {
 	exportCmd.Flags().StringVar(&cmd.Config.Database.Password, "password", "", "Database password")
 	exportCmd.Flags().StringVar(&cmd.Config.Database.DSN, "dsn", "", "Database DSN connection string")
 	exportCmd.Flags().StringVar(&cmd.Config.Database.Schema, "schema", "", "Database schema")
-	
+
 	// 导出参数
 	exportCmd.Flags().StringVar(&cmd.Config.Export.OutputDir, "output", "./output", "Output directory")
 	exportCmd.Flags().StringSliceVar(&cmd.Config.Export.Formats, "formats", []string{"markdown"}, "Export formats (markdown, sql)")
@@ -75,7 +75,7 @@ func newExportCmd() *cobra.Command {
 	exportCmd.Flags().StringSliceVar(&cmd.Config.Export.Tables, "tables", nil, "Tables to export (comma-separated)")
 	exportCmd.Flags().StringSliceVar(&cmd.Config.Export.Exclude, "exclude", nil, "Tables to exclude (comma-separated)")
 	exportCmd.Flags().StringSliceVar(&cmd.Config.Export.Patterns, "patterns", nil, "Table name patterns to match (regex)")
-	
+
 	return exportCmd
 }
 
@@ -90,5 +90,3 @@ func newVersionCmd() *cobra.Command {
 		},
 	}
 }
-
-

@@ -9,7 +9,7 @@ const (
 )
 
 // 执行f并忽略panic
-func AbsorbPanic(f func()){
+func AbsorbPanic(f func()) {
 	defer func() {
 		if p := recover(); p != nil {
 			// TODO do something
@@ -23,7 +23,7 @@ func SliceEquals(src []byte, dest []byte) bool {
 		return false
 	}
 
-	for i, _ := range src {
+	for i := range src {
 		if src[i] != dest[i] {
 			return false
 		}

@@ -12,7 +12,7 @@ import (
 	"sync"
 )
 
-//var dmHome = flag.String("DM_HOME", "", "Where DMDB installed")
+// var dmHome = flag.String("DM_HOME", "", "Where DMDB installed")
 var flagLock = sync.Mutex{}
 
 func NewTLSFromTCP(conn net.Conn, sslCertPath string, sslKeyPath string, user string) (*tls.Conn, error) {

@@ -8,28 +8,28 @@ import (
 type Exporter interface {
 	// Export 导出表结构
 	Export(tables []model.Table, options ExportOptions) error
-	
+
 	// GetName 获取导出器名称
 	GetName() string
-	
+
 	// GetExtension 获取文件扩展名
 	GetExtension() string
 }
 
 // ExportOptions 导出选项
 type ExportOptions struct {
-	OutputDir   string   // 输出目录
-	FileName    string   // 文件名（单文件模式）
-	SplitFiles  bool     // 是否分文件导出
-	Tables      []string // 指定导出的表（空表示全部）
-	Exclude     []string // 排除的表
+	OutputDir  string   // 输出目录
+	FileName   string   // 文件名（单文件模式）
+	SplitFiles bool     // 是否分文件导出
+	Tables     []string // 指定导出的表（空表示全部）
+	Exclude    []string // 排除的表
 }
 
 // ExporterFactory 导出器工厂接口
 type ExporterFactory interface {
 	// Create 创建 Exporter 实例
 	Create() (Exporter, error)
-	
+
 	// GetType 获取导出器类型
 	GetType() string
 }

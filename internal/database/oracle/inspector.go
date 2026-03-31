@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"strings"
 
-	_ "github.com/sijms/go-ora/v2" // 纯 Go Oracle 驱动
 	"github.com/schema-export/schema-export/internal/database"
 	"github.com/schema-export/schema-export/internal/inspector"
+	_ "github.com/sijms/go-ora/v2" // 纯 Go Oracle 驱动
 )
 
 // Inspector Oracle 数据库 Inspector 实现

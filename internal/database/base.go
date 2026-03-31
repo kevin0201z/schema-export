@@ -10,12 +10,12 @@ import (
 )
 
 const (
-	DefaultPingTimeout      = 10 * time.Second
-	DefaultTestTimeout      = 5 * time.Second
-	DefaultExportTimeout    = 30 * time.Minute
-	DefaultMaxOpenConns     = 10
-	DefaultMaxIdleConns     = 5
-	DefaultConnMaxLifetime  = 30 * time.Minute
+	DefaultPingTimeout     = 10 * time.Second
+	DefaultTestTimeout     = 5 * time.Second
+	DefaultExportTimeout   = 30 * time.Minute
+	DefaultMaxOpenConns    = 10
+	DefaultMaxIdleConns    = 5
+	DefaultConnMaxLifetime = 30 * time.Minute
 )
 
 // BaseInspector 基础 Inspector 实现
@@ -49,10 +49,10 @@ func (b *BaseInspector) TestConnection(ctx context.Context) error {
 	if b.db == nil {
 		return fmt.Errorf("database not connected")
 	}
-	
+
 	ctx, cancel := context.WithTimeout(ctx, DefaultTestTimeout)
 	defer cancel()
-	
+
 	return b.db.PingContext(ctx)
 }
 

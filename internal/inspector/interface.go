@@ -9,25 +9,25 @@ import (
 type Inspector interface {
 	// Connect 连接数据库
 	Connect(ctx context.Context) error
-	
+
 	// Close 关闭连接
 	Close() error
-	
+
 	// TestConnection 测试连接
 	TestConnection(ctx context.Context) error
-	
+
 	// GetTables 获取所有表列表
 	GetTables(ctx context.Context) ([]model.Table, error)
-	
+
 	// GetTable 获取单个表的完整元数据
 	GetTable(ctx context.Context, tableName string) (*model.Table, error)
-	
+
 	// GetColumns 获取表字段列表
 	GetColumns(ctx context.Context, tableName string) ([]model.Column, error)
-	
+
 	// GetIndexes 获取表索引列表
 	GetIndexes(ctx context.Context, tableName string) ([]model.Index, error)
-	
+
 	// GetForeignKeys 获取表外键列表
 	GetForeignKeys(ctx context.Context, tableName string) ([]model.ForeignKey, error)
 }
@@ -36,7 +36,7 @@ type Inspector interface {
 type InspectorFactory interface {
 	// Create 创建 Inspector 实例
 	Create(config ConnectionConfig) (Inspector, error)
-	
+
 	// GetType 获取数据库类型
 	GetType() string
 }

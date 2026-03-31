@@ -48,7 +48,7 @@ func (filterChain *filterChain) DmDriverOpenConnector(d *DmDriver, dsn string) (
 	return d.openConnector(dsn)
 }
 
-//DmConnector
+// DmConnector
 func (filterChain *filterChain) DmConnectorConnect(c *DmConnector, ctx context.Context) (*DmConnection, error) {
 	if filterChain.fpos < len(filterChain.filters) {
 		f := filterChain.filters[filterChain.fpos]
@@ -69,7 +69,7 @@ func (filterChain *filterChain) DmConnectorDriver(c *DmConnector) *DmDriver {
 	return c.driver()
 }
 
-//DmConnection
+// DmConnection
 func (filterChain *filterChain) DmConnectionBegin(c *DmConnection) (*DmConnection, error) {
 	if filterChain.fpos < len(filterChain.filters) {
 		f := filterChain.filters[filterChain.fpos]
@@ -209,7 +209,7 @@ func (filterChain *filterChain) DmConnectionCheckNamedValue(c *DmConnection, nv 
 	return c.checkNamedValue(nv)
 }
 
-//DmStatement
+// DmStatement
 func (filterChain *filterChain) DmStatementClose(s *DmStatement) error {
 	if filterChain.fpos < len(filterChain.filters) {
 		f := filterChain.filters[filterChain.fpos]
@@ -280,7 +280,7 @@ func (filterChain *filterChain) DmStatementCheckNamedValue(s *DmStatement, nv *d
 	return s.checkNamedValue(nv)
 }
 
-//DmResult
+// DmResult
 func (filterChain *filterChain) DmResultLastInsertId(r *DmResult) (int64, error) {
 	if filterChain.fpos < len(filterChain.filters) {
 		f := filterChain.filters[filterChain.fpos]
@@ -301,7 +301,7 @@ func (filterChain *filterChain) DmResultRowsAffected(r *DmResult) (int64, error)
 	return r.rowsAffected()
 }
 
-//DmRows
+// DmRows
 func (filterChain *filterChain) DmRowsColumns(r *DmRows) []string {
 	if filterChain.fpos < len(filterChain.filters) {
 		f := filterChain.filters[filterChain.fpos]

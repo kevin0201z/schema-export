@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 
 	_ "gitee.com/chunanyong/dm" // 达梦 Go 驱动
 	"github.com/schema-export/schema-export/internal/database"
@@ -47,22 +48,21 @@ func (i *Inspector) Connect(ctx context.Context) error {
 func (i *Inspector) BuildDSN() string {
 	config := i.GetConfig()
 	if config.DSN != "" {
-		return config.DSN
+		// 如果 DSN 中已经有 dm:// 前缀，直接返回
+		if strings.HasPrefix(config.DSN, "dm://") {
+			return config.DSN
+		}
+		// 添加 dm:// 前缀
+		return "dm://" + config.DSN
 	}
 
-	// 达梦 DSN 格式: dm://user:password@host:port?schema=schema_name
-	dsn := fmt.Sprintf("dm://%s:%s@%s:%d",
+	// 达梦 DSN 格式: dm://user:password@host:port
+	return fmt.Sprintf("dm://%s:%s@%s:%d",
 		config.Username,
 		config.Password,
 		config.Host,
 		config.Port,
 	)
-
-	if config.Schema != "" {
-		dsn = dsn + "?schema=" + config.Schema
-	}
-
-	return dsn
 }
 
 // GetTables 获取所有表列表

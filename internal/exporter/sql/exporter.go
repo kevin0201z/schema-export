@@ -20,6 +20,7 @@ type Exporter struct {
 func NewExporter() *Exporter {
 	tmpl := template.Must(template.New("sql").Funcs(template.FuncMap{
 		"join": strings.Join,
+		"add":  func(a, b int) int { return a + b },
 	}).Parse(tableTemplate))
 	
 	return &Exporter{
@@ -115,7 +116,7 @@ const tableTemplate = `-- Table: {{.Name}}
 
 CREATE TABLE {{.Name}} (
 {{- range $i, $col := .Columns }}
-    {{$col.Name}} {{$col.GetFullDataType}}{{if not $col.IsNullable}} NOT NULL{{end}}{{if $col.DefaultValue}} DEFAULT {{$col.DefaultValue}}{{end}}{{if $col.IsPrimaryKey}} PRIMARY KEY{{end}}{{if $col.IsAutoIncrement}} AUTO_INCREMENT{{end}}{{if $col.Comment}} -- {{$col.Comment}}{{end}}{{if lt $i (len $.Columns)}},{{end}}
+    {{$col.Name}} {{$col.GetFullDataType}}{{if not $col.IsNullable}} NOT NULL{{end}}{{if $col.DefaultValue}} DEFAULT {{$col.DefaultValue}}{{end}}{{if $col.IsPrimaryKey}} PRIMARY KEY{{end}}{{if $col.IsAutoIncrement}} AUTO_INCREMENT{{end}}{{if $col.Comment}} -- {{$col.Comment}}{{end}}{{if lt (add $i 1) (len $.Columns)}},{{end}}
 {{- end }}
 );
 

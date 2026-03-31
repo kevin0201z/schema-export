@@ -104,14 +104,17 @@ GOOS=darwin GOARCH=amd64 go build -o schema-export-darwin ./cmd/schema-export
   --dsn "dm://SYSDBA:password@localhost:5236?schema=MC_WYWXZJGLPT" \
   --output ./docs
 
-# Oracle DSN 格式
+# Oracle DSN 格式（纯 Go 驱动，无需安装 Oracle Client）
 ./schema-export export \
   --type oracle \
-  --dsn "scott/tiger@localhost:1521/ORCL" \
+  --dsn "oracle://scott:tiger@localhost:1521/ORCL" \
+  --schema SCHEMA_NAME \
   --output ./docs
 ```
 
-> **注意**：DSN 中的 `schema` 参数会被自动提取。对于达梦和 Oracle 数据库，建议指定 schema 以导出正确的表结构。
+> **注意**：
+> - DSN 中的 `schema` 参数会被自动提取
+> - Oracle 使用 `go-ora` 纯 Go 驱动，无需安装 Oracle Instant Client
 
 ### 使用环境变量
 
@@ -285,19 +288,40 @@ ALTER TABLE users ADD CONSTRAINT fk_user_role FOREIGN KEY (role_id) REFERENCES r
 
 ### Schema 参数（达梦/Oracle）
 
-对于达梦（DM）和 Oracle 数据库，**强烈建议**指定 `--schema` 参数或在 DSN 中指定 schema：
+对于达梦（DM）和 Oracle 数据库，**强烈建议**指定 `--schema` 参数来导出指定 schema 下的表：
 
-- **不指定 schema**：导出当前连接用户（如 SYSDBA）拥有的表
+- **不指定 schema**：导出当前连接用户拥有的表
 - **指定 schema**：导出该 schema 下的所有表（需要相应权限）
 
-```bash
-# 方式1：使用 --schema 参数
-./schema-export export --type dm --schema MC_WYWXZJGLPT ...
+**统一使用方式（推荐）：**
 
-# 方式2：在 DSN 中指定 schema（推荐）
+```bash
+# 达梦数据库
+./schema-export export --type dm \
+  --dsn "dm://SYSDBA:password@localhost:5236" \
+  --schema MC_WYWXZJGLPT
+
+# Oracle 数据库
+./schema-export export --type oracle \
+  --dsn "oracle://user:password@localhost:1521/ORCL" \
+  --schema OTHER_SCHEMA
+```
+
+**替代方式（直接在 DSN 中指定）：**
+
+```bash
+# 达梦数据库
 ./schema-export export --type dm \
   --dsn "dm://SYSDBA:password@localhost:5236?schema=MC_WYWXZJGLPT"
+
+# Oracle 数据库
+./schema-export export --type oracle \
+  --dsn "oracle://user:password@localhost:1521/ORCL?schema=OTHER_SCHEMA"
 ```
+
+**注意：**
+- 达梦中 schema 参数用于指定模式名，查询 `ALL_` 前缀的数据字典视图
+- Oracle 中 schema 等同于用户名，指定后可查询其他用户的表（需权限）
 
 ## 数据库支持
 
@@ -306,7 +330,7 @@ ALTER TABLE users ADD CONSTRAINT fk_user_role FOREIGN KEY (role_id) REFERENCES r
 | 数据库        | 状态     | 驱动                    |
 | ---------- | ------ | --------------------- |
 | 达梦（DM）     | ✅ 已支持  | dm-go-driver（纯 Go 驱动） |
-| Oracle     | ✅ 已支持  | godror                |
+| Oracle     | ✅ 已支持  | go-ora（纯 Go 驱动）       |
 | MySQL      | 🚧 计划中 | -                     |
 | PostgreSQL | 🚧 计划中 | -                     |
 | SQL Server | 🚧 计划中 | -                     |

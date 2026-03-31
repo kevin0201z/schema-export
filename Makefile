@@ -1,94 +1,144 @@
-.PHONY: build build-all clean test install
+# schema-export Makefile
 
-# Variables
+# 变量定义
 BINARY_NAME=schema-export
-VERSION=$(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
-COMMIT=$(shell git rev-parse --short HEAD 2>/dev/null || echo "none")
+MAIN_PACKAGE=./cmd/schema-export
+BUILD_DIR=./build
+VERSION?=dev
+COMMIT=$(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 DATE=$(shell date -u '+%Y-%m-%d_%H:%M:%S')
-LDFLAGS=-ldflags "-X main.version=$(VERSION) -X main.commit=$(COMMIT) -X main.date=$(DATE)"
 
-# Default build
+# Go 参数
+GOBASE=$(shell pwd)
+GOBIN=$(GOBASE)/build
+GOFILES=$(wildcard *.go)
+LDFLAGS=-ldflags "-X main.version=${VERSION} -X main.commit=${COMMIT} -X main.date=${DATE}"
+
+# 默认目标
+.PHONY: all
+all: build
+
+# 构建
+.PHONY: build
 build:
-	go build $(LDFLAGS) -o $(BINARY_NAME) ./cmd/schema-export
+	@echo "Building $(BINARY_NAME)..."
+	@mkdir -p $(BUILD_DIR)
+	go build $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME) $(MAIN_PACKAGE)
+	@echo "Build complete: $(BUILD_DIR)/$(BINARY_NAME)"
 
-# Build for all platforms
-build-all: build-linux build-windows build-darwin
+# 安装到 $GOPATH/bin
+.PHONY: install
+install:
+	go install $(LDFLAGS) $(MAIN_PACKAGE)
 
-build-linux:
-	GOOS=linux GOARCH=amd64 go build $(LDFLAGS) -o $(BINARY_NAME)-linux-amd64 ./cmd/schema-export
-
-build-windows:
-	GOOS=windows GOARCH=amd64 go build $(LDFLAGS) -o $(BINARY_NAME)-windows-amd64.exe ./cmd/schema-export
-
-build-darwin:
-	GOOS=darwin GOARCH=amd64 go build $(LDFLAGS) -o $(BINARY_NAME)-darwin-amd64 ./cmd/schema-export
-
-# Clean build artifacts
+# 清理构建产物
+.PHONY: clean
 clean:
-	rm -f $(BINARY_NAME) $(BINARY_NAME)-*
+	@echo "Cleaning..."
+	@rm -rf $(BUILD_DIR)
+	@go clean
+	@echo "Clean complete"
 
-# Run tests
+# 运行测试
+.PHONY: test
 test:
+	@echo "Running tests..."
 	go test -v ./...
 
-# Install dependencies
+# 运行测试并生成覆盖率报告
+.PHONY: test-coverage
+test-coverage:
+	@echo "Running tests with coverage..."
+	go test -coverprofile=coverage.out ./...
+	go tool cover -html=coverage.out -o coverage.html
+	@echo "Coverage report generated: coverage.html"
+
+# 代码格式化
+.PHONY: fmt
+fmt:
+	@echo "Formatting code..."
+	go fmt ./...
+
+# 代码检查
+.PHONY: vet
+vet:
+	@echo "Running go vet..."
+	go vet ./...
+
+# 静态检查 (需要安装 golangci-lint)
+.PHONY: lint
+lint:
+	@echo "Running linter..."
+	@if command -v golangci-lint >/dev/null 2>&1; then \
+		golangci-lint run; \
+	else \
+		echo "golangci-lint not installed, skipping..."; \
+		echo "Install with: curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin"; \
+	fi
+
+# 下载依赖
+.PHONY: deps
 deps:
+	@echo "Downloading dependencies..."
 	go mod download
 	go mod tidy
 
-# Install binary to GOPATH/bin
-install:
-	go install $(LDFLAGS) ./cmd/schema-export
+# 跨平台编译
+.PHONY: build-all
+build-all: build-linux build-windows build-darwin
 
-# Run the application
+.PHONY: build-linux
+build-linux:
+	@echo "Building for Linux..."
+	@mkdir -p $(BUILD_DIR)
+	GOOS=linux GOARCH=amd64 go build $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME)-linux-amd64 $(MAIN_PACKAGE)
+
+.PHONY: build-windows
+build-windows:
+	@echo "Building for Windows..."
+	@mkdir -p $(BUILD_DIR)
+	GOOS=windows GOARCH=amd64 go build $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME)-windows-amd64.exe $(MAIN_PACKAGE)
+
+.PHONY: build-darwin
+build-darwin:
+	@echo "Building for macOS..."
+	@mkdir -p $(BUILD_DIR)
+	GOOS=darwin GOARCH=amd64 go build $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME)-darwin-amd64 $(MAIN_PACKAGE)
+	GOOS=darwin GOARCH=arm64 go build $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME)-darwin-arm64 $(MAIN_PACKAGE)
+
+# 运行示例
+.PHONY: run
 run: build
-	./$(BINARY_NAME)
+	$(BUILD_DIR)/$(BINARY_NAME) --help
 
-# Development mode with hot reload (requires air)
+# 开发模式运行
+.PHONY: dev
 dev:
-	air
+	go run $(MAIN_PACKAGE) export --help
 
-# Format code
-fmt:
-	go fmt ./...
+# 查看版本
+.PHONY: version
+version: build
+	$(BUILD_DIR)/$(BINARY_NAME) version
 
-# Run linter
-lint:
-	golangci-lint run
-
-# Check for vulnerabilities
-vuln:
-	govulncheck ./...
-
-# Generate test coverage
-coverage:
-	go test -coverprofile=coverage.out ./...
-	go tool cover -html=coverage.out -o coverage.html
-
-# Docker build
-docker-build:
-	docker build -t $(BINARY_NAME):$(VERSION) .
-
-# Docker run
-docker-run:
-	docker run --rm -it $(BINARY_NAME):$(VERSION)
-
-# Help
+# 帮助信息
+.PHONY: help
 help:
 	@echo "Available targets:"
-	@echo "  build        - Build the binary for current platform"
-	@echo "  build-all    - Build for all platforms (Linux, Windows, macOS)"
-	@echo "  build-linux  - Build for Linux AMD64"
-	@echo "  build-windows- Build for Windows AMD64"
-	@echo "  build-darwin - Build for macOS AMD64"
-	@echo "  clean        - Remove build artifacts"
-	@echo "  test         - Run tests"
-	@echo "  deps         - Download and tidy dependencies"
-	@echo "  install      - Install binary to GOPATH/bin"
-	@echo "  run          - Build and run the application"
-	@echo "  fmt          - Format code"
-	@echo "  lint         - Run linter"
-	@echo "  coverage     - Generate test coverage report"
-	@echo "  docker-build - Build Docker image"
-	@echo "  docker-run   - Run Docker container"
-	@echo "  help         - Show this help message"
+	@echo "  make build        - Build the binary"
+	@echo "  make install      - Install to \$$GOPATH/bin"
+	@echo "  make clean        - Clean build artifacts"
+	@echo "  make test         - Run tests"
+	@echo "  make test-coverage- Run tests with coverage report"
+	@echo "  make fmt          - Format code"
+	@echo "  make vet          - Run go vet"
+	@echo "  make lint         - Run linter (golangci-lint)"
+	@echo "  make deps         - Download and tidy dependencies"
+	@echo "  make build-all    - Build for all platforms"
+	@echo "  make build-linux  - Build for Linux"
+	@echo "  make build-windows- Build for Windows"
+	@echo "  make build-darwin - Build for macOS"
+	@echo "  make run          - Build and run"
+	@echo "  make dev          - Run in development mode"
+	@echo "  make version      - Show version"
+	@echo "  make help         - Show this help"

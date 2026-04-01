@@ -198,8 +198,8 @@ type testExporter struct {
 }
 
 func (e *testExporter) Export(_ []model.Table, _ exporter.ExportOptions) error { return e.exportErr }
-func (e *testExporter) GetName() string                                         { return "test" }
-func (e *testExporter) GetExtension() string                                    { return ".test" }
+func (e *testExporter) GetName() string                                        { return "test" }
+func (e *testExporter) GetExtension() string                                   { return ".test" }
 
 type testExporterFactory struct {
 	exportErr error

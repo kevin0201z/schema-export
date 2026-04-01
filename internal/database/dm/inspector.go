@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	_ "dm" // 达梦 Go 驱动（本地驱动）
+	_ "dm" // 达梦 Go 驱动（仓库内置 third_party 模块）
 
 	"github.com/schema-export/schema-export/internal/database"
 	"github.com/schema-export/schema-export/internal/inspector"

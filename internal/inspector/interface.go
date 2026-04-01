@@ -43,7 +43,7 @@ type InspectorFactory interface {
 
 // ConnectionConfig 数据库连接配置
 type ConnectionConfig struct {
-	Type     string // 数据库类型（dm, oracle, mysql, postgres等）
+	Type     string // 数据库类型（当前支持 dm、oracle、sqlserver）
 	Host     string // 主机地址
 	Port     int    // 端口
 	Database string // 数据库名

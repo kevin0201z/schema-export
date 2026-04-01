@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	exportapp "github.com/schema-export/schema-export/internal/app/export"
 	"github.com/schema-export/schema-export/internal/exporter"
 	"github.com/schema-export/schema-export/internal/model"
 )
@@ -181,7 +182,7 @@ func TestParseOutputPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			dir, file := parseOutputPath(tt.outputPath, tt.format)
+			dir, file := exportapp.ParseOutputPath(tt.outputPath, tt.format)
 
 			if dir != tt.expectedDir {
 				t.Errorf("expected dir %q, got %q", tt.expectedDir, dir)
@@ -247,7 +248,7 @@ func TestExportAllFormats(t *testing.T) {
 			cmd := NewExportCommand()
 			cmd.SetFormats(tt.formats)
 
-			err := cmd.exportAllFormats([]model.Table{{Name: "users"}})
+			err := exportapp.NewService(cmd.Config).ExportAllFormats([]model.Table{{Name: "users"}})
 			if tt.wantErr == "" && err != nil {
 				t.Fatalf("expected no error, got %v", err)
 			}

@@ -1,12 +1,12 @@
 # 数据库结构导出工具
 
-一个支持达梦数据库（DM）、Oracle、MySQL、PostgreSQL 等多种数据库的跨数据库结构导出工具。
+一个当前支持达梦数据库（DM）、Oracle、SQL Server 的跨数据库结构导出工具。
 
 可生成 Markdown 和 SQL DDL 格式的数据库结构文档。
 
 ## 功能特性
 
-- **多数据库支持**：达梦（DM）、Oracle、SQL Server、MySQL、PostgreSQL（可扩展）
+- **多数据库支持**：达梦（DM）、Oracle、SQL Server
 - **多种导出格式**：Markdown、SQL DDL
 - **灵活的导出模式**：单文件或按表分文件导出
 - **表过滤功能**：包含/排除表、正则表达式匹配
@@ -183,7 +183,7 @@ export EXPORT_SPLIT=true
 
 | 参数           | 默认值      | 说明                              |
 | ------------ | -------- | ------------------------------- |
-| `--type`     | dm       | 数据库类型（dm、oracle、sqlserver、mysql、postgres） |
+| `--type`     | dm       | 数据库类型（dm、oracle、sqlserver） |
 | `--host`     | <br />   | 数据库主机                           |
 | `--port`     | 0        | 数据库端口                           |
 | `--database` | <br />   | 数据库名                            |
@@ -285,56 +285,57 @@ export EXPORT_SPLIT=true
 | 达梦（DM）     | ✅ 已支持  | dm-go-driver（纯 Go 驱动） |
 | Oracle     | ✅ 已支持  | go-ora（纯 Go 驱动）       |
 | SQL Server | ✅ 已支持  | go-mssqldb（纯 Go 驱动）   |
-| MySQL      | 🚧 计划中 | -                     |
-| PostgreSQL | 🚧 计划中 | -                     |
-| SQLite     | 🚧 计划中 | -                     |
+
+后续如需扩展 MySQL、PostgreSQL、SQLite，可通过新增对应 Inspector 实现接入。
 
 ## 架构
 
-```
-schema-export/
-├── cmd/schema-export/          # CLI 入口
-├── internal/
-│   ├── config/                 # 配置管理
-│   ├── database/               # 数据库驱动
-│   ├── inspector/              # Inspector 接口
-│   ├── model/                  # 数据模型
-│   ├── exporter/               # 导出器
-│   └── cli/                    # CLI 命令
-├── docs/                       # 文档输出目录
-├── go.mod                      # Go 模块定义
-├── go.sum                      # Go 依赖校验
-├── Makefile                    # 构建脚本
-└── README.md                   # 项目说明文档
-```
+项目采用“CLI 负责入口、应用服务负责编排、Inspector/Exporter 负责扩展点”的分层结构。
+
+这样的拆分有两个目的：
+
+- 把不同数据库的查询差异隔离在 `internal/database/` 下，新增数据库时不需要改动主流程。
+- 把不同输出格式的渲染逻辑隔离在 `internal/exporter/` 下，新增格式时不需要改动数据库读取逻辑。
 
 ### 核心组件说明
 
 | 组件 | 职责 | 关键文件 |
 |------|------|----------|
 | **CLI** | 命令行参数解析、命令路由 | `cmd/schema-export/main.go`, `internal/cli/` |
-| **Config** | 配置管理、环境变量、表过滤 | `internal/config/` |
+| **App** | 导出流程编排 | `internal/app/export/` |
+| **Config** | 配置管理、环境变量、配置校验 | `internal/config/` |
+| **Filter** | 表过滤规则 | `internal/filter/` |
 | **Inspector** | 数据库元数据查询接口 | `internal/inspector/interface.go` |
 | **Database** | 各数据库 Inspector 实现 | `internal/database/dm/`, `internal/database/oracle/`, `internal/database/sqlserver/` |
 | **Model** | 数据模型定义 | `internal/model/` |
 | **Exporter** | 导出格式实现 | `internal/exporter/markdown/`, `internal/exporter/sql/` |
+| **Third-Party** | 仓库内置第三方驱动源码 | `third_party/dm-go-driver/` |
+
+### 目录重点
+
+- `cmd/schema-export/`：程序入口与命令注册。
+- `internal/app/export/`：完整导出流程的编排层。
+- `internal/database/`：不同数据库的 Inspector 实现。
+- `internal/exporter/`：不同输出格式的导出实现。
+- `third_party/`：随仓库分发的第三方源码。
 
 ### 数据流向
 
 ```
-CLI 参数 → Config → Inspector → Database Driver → Model → Exporter → 输出文件
-                ↓
-            Filter (表过滤)
+CLI 参数 → Config → App Service → Inspector → Database Driver → Model → Exporter → 输出文件
+                      ↓
+                   Filter
 ```
 
 1. **CLI** 解析用户输入的参数
 2. **Config** 整合 CLI 参数和环境变量
-3. **Inspector** 根据数据库类型创建对应的驱动实例
-4. **Database Driver** 查询数据库元数据（表、字段、索引、外键）
-5. **Filter** 根据配置过滤表
-6. **Model** 存储查询结果
-7. **Exporter** 将模型转换为指定格式（Markdown/SQL）
-8. **输出文件** 写入磁盘
+3. **App Service** 编排导出流程
+4. **Inspector** 根据数据库类型创建对应的驱动实例
+5. **Database Driver** 查询数据库元数据（表、字段、索引、外键）
+6. **Filter** 根据配置过滤表
+7. **Model** 存储查询结果
+8. **Exporter** 将模型转换为指定格式（Markdown/SQL）
+9. **输出文件** 写入磁盘
 
 ## 许可证
 

@@ -20,4 +20,4 @@ require (
 	golang.org/x/text v0.14.0 // indirect
 )
 
-replace dm => ./internal/dm-go-driver/dm
+replace dm => ./third_party/dm-go-driver/dm

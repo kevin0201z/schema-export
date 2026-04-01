@@ -1,4 +1,4 @@
-package config
+package filter
 
 import (
 	"testing"

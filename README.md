@@ -222,14 +222,14 @@ export EXPORT_SPLIT=true
 
 1. **输出目录**：指定目录路径，文件名使用默认值
    ```bash
-   --output ./docs
-   # 生成：./docs/schema.md 或 ./docs/schema.sql
+   --output ./output
+   # 生成：./output/schema.md 或 ./output/schema.sql
    ```
 2. **输出文件**：指定完整文件路径，扩展名会根据格式自动调整
    ```bash
-   --output ./docs/tables.md
-   # Markdown 格式生成：./docs/tables.md
-   # SQL 格式生成：./docs/tables.sql
+   --output ./output/tables.md
+   # Markdown 格式生成：./output/tables.md
+   # SQL 格式生成：./output/tables.sql
    ```
 
 ### 文件覆盖

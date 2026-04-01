@@ -105,9 +105,14 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-go-${{ matrix.go-version }}-
     - name: Download dependencies
-      run: go mod download
-    - name: Run tests
-      run: go test ./...
+      run: |
+        # prefer the Go proxy, fallback to direct
+        go env -w GOPROXY=https://proxy.golang.org,direct
+        go mod download
+    - name: Run tests (full)
+      run: |
+        # run all tests verbosely and disable test caching to ensure sqlmock expectations run fresh
+        go test ./... -v -count=1
 
   build:
     name: Build artifacts

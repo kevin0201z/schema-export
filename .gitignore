@@ -33,7 +33,6 @@ Thumbs.db
 
 # Output directories and files
 output/
-docs/
 *.sql
 
 # Log files

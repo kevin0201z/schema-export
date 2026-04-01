@@ -22,6 +22,10 @@ jobs:
         python3 -m pip install --upgrade pip
         pip3 install --user pre-commit
       shell: bash
+    - name: Set up Go for pre-commit
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.25'
     - name: Install golangci-lint for pre-commit
       env:
         GOLANGCI_LINT_VERSION: v1.64.8

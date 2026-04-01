@@ -6,15 +6,18 @@ repos:
         entry: sh -c "out=$(gofmt -s -l .) && if [ -n \"$out\" ]; then echo \"gofmt found files that need formatting:\"; echo \"$out\"; exit 1; fi"
         language: system
         files: '\.go$'
+        pass_filenames: false
 
       - id: govet
         name: go vet
         entry: go vet ./...
         language: system
         files: ''
+        pass_filenames: false
 
       - id: golangci-lint
         name: golangci-lint
         entry: bash -c 'if command -v golangci-lint >/dev/null 2>&1; then golangci-lint run; else echo "golangci-lint not installed (install with go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.8)"; exit 1; fi'
         language: system
         files: '\.go$'
+        pass_filenames: false

@@ -88,7 +88,7 @@ func (c *Config) LoadFromEnv() {
 		c.Export.OutputDir = v
 	}
 	if v := os.Getenv("EXPORT_FORMATS"); v != "" {
-		c.Export.Formats = strings.Split(v, ",")
+		c.Export.Formats = normalizeFormats(strings.Split(v, ","))
 	}
 	if v := os.Getenv("EXPORT_SPLIT"); v != "" {
 		c.Export.SplitFiles = (v == "true" || v == "1")
@@ -115,6 +115,9 @@ func (c *Config) Validate() error {
 		}
 	}
 
+	c.Database.Schema = normalizeSchema(c.Database.Type, c.Database.Schema)
+	c.Export.Formats = normalizeFormats(c.Export.Formats)
+
 	if len(c.Export.Formats) == 0 {
 		c.Export.Formats = []string{"markdown"}
 	}
@@ -136,6 +139,34 @@ func extractSchemaFromDSN(dsn string) string {
 	}
 	schema := u.Query().Get("schema")
 	return schema
+}
+
+func normalizeFormats(formats []string) []string {
+	var normalized []string
+	for _, format := range formats {
+		format = strings.TrimSpace(strings.ToLower(format))
+		if format != "" {
+			normalized = append(normalized, format)
+		}
+	}
+	return normalized
+}
+
+func normalizeSchema(dbType, schema string) string {
+	schema = strings.TrimSpace(schema)
+	if schema == "" {
+		return ""
+	}
+
+	switch strings.ToLower(strings.TrimSpace(dbType)) {
+	case "oracle", "dm":
+		if strings.HasPrefix(schema, "\"") && strings.HasSuffix(schema, "\"") {
+			return schema
+		}
+		return strings.ToUpper(schema)
+	default:
+		return schema
+	}
 }
 
 // DefaultConfig 返回默认配置

@@ -99,7 +99,7 @@ GOOS=darwin GOARCH=amd64 go build -o schema-export-darwin ./cmd/schema-export
 # 指定输出文件名（多格式导出时会自动调整扩展名）
 ./schema-export export \
   --type dm \
-  --dsn "dm://SYSDBA:password@localhost:5236?schema=sc" \
+  --dsn "dm://SYSDBA:password@localhost:5236?schema=SC" \
   --formats markdown,sql \
   --output ./docs/schema.md
 # 将生成：schema.md 和 schema.sql
@@ -111,7 +111,7 @@ GOOS=darwin GOARCH=amd64 go build -o schema-export-darwin ./cmd/schema-export
 # 达梦 DSN 格式（推荐指定 schema）
 ./schema-export export \
   --type dm \
-  --dsn "dm://SYSDBA:password@localhost:5236?schema=sc" \
+  --dsn "dm://SYSDBA:password@localhost:5236?schema=SC" \
   --output ./docs
 
 # Oracle DSN 格式
@@ -166,7 +166,7 @@ export EXPORT_SPLIT=true
 # 导出指定 schema 下以 tb_ 开头的表
 ./schema-export export \
   --type dm \
-  --dsn "dm://SYSDBA:password@localhost:5236?schema=sc" \
+  --dsn "dm://SYSDBA:password@localhost:5236?schema=SC" \
   --patterns "^tb_"
 ```
 

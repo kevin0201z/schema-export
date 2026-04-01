@@ -31,6 +31,8 @@ func TestLoadFromEnv(t *testing.T) {
 	origHost := os.Getenv("DB_HOST")
 	origPort := os.Getenv("DB_PORT")
 	origOutput := os.Getenv("EXPORT_OUTPUT")
+	origFormats := os.Getenv("EXPORT_FORMATS")
+	origSchema := os.Getenv("DB_SCHEMA")
 
 	// 测试后恢复
 	defer func() {
@@ -38,6 +40,8 @@ func TestLoadFromEnv(t *testing.T) {
 		os.Setenv("DB_HOST", origHost)
 		os.Setenv("DB_PORT", origPort)
 		os.Setenv("EXPORT_OUTPUT", origOutput)
+		os.Setenv("EXPORT_FORMATS", origFormats)
+		os.Setenv("DB_SCHEMA", origSchema)
 	}()
 
 	// 设置测试环境变量
@@ -45,6 +49,8 @@ func TestLoadFromEnv(t *testing.T) {
 	os.Setenv("DB_HOST", "testhost")
 	os.Setenv("DB_PORT", "1521")
 	os.Setenv("EXPORT_OUTPUT", "./testoutput")
+	os.Setenv("EXPORT_FORMATS", "MARKDOWN, sql ,")
+	os.Setenv("DB_SCHEMA", "test_schema")
 
 	cfg := DefaultConfig()
 	cfg.LoadFromEnv()
@@ -64,6 +70,14 @@ func TestLoadFromEnv(t *testing.T) {
 	if cfg.Export.OutputDir != "./testoutput" {
 		t.Errorf("expected output dir './testoutput', got '%s'", cfg.Export.OutputDir)
 	}
+
+	if len(cfg.Export.Formats) != 2 || cfg.Export.Formats[0] != "markdown" || cfg.Export.Formats[1] != "sql" {
+		t.Errorf("expected normalized formats ['markdown', 'sql'], got %v", cfg.Export.Formats)
+	}
+
+	if cfg.Database.Schema != "test_schema" {
+		t.Errorf("expected schema from env to remain unchanged before validate, got '%s'", cfg.Database.Schema)
+	}
 }
 
 func TestValidate(t *testing.T) {
@@ -77,7 +91,7 @@ func TestValidate(t *testing.T) {
 			config: &Config{
 				Database: DatabaseConfig{
 					Type: "dm",
-					DSN:  "dm://user:pass@localhost:5236",
+					DSN:  "dm://user:pass@localhost:5236?schema=test_schema",
 				},
 			},
 			wantErr: false,
@@ -128,6 +142,52 @@ func TestValidate(t *testing.T) {
 			err := tt.config.Validate()
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Validate() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestValidateNormalizesSchemaAndFormats(t *testing.T) {
+	cfg := &Config{
+		Database: DatabaseConfig{
+			Type: "oracle",
+			DSN:  "oracle://user:pass@localhost:1521/ORCL?schema=test_schema",
+		},
+		Export: ExportConfig{
+			Formats: []string{"MARKDOWN", " sql ", ""},
+		},
+	}
+
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("Validate() failed: %v", err)
+	}
+
+	if cfg.Database.Schema != "TEST_SCHEMA" {
+		t.Fatalf("expected normalized schema TEST_SCHEMA, got %q", cfg.Database.Schema)
+	}
+
+	if len(cfg.Export.Formats) != 2 || cfg.Export.Formats[0] != "markdown" || cfg.Export.Formats[1] != "sql" {
+		t.Fatalf("expected normalized formats [markdown sql], got %v", cfg.Export.Formats)
+	}
+}
+
+func TestNormalizeSchema(t *testing.T) {
+	tests := []struct {
+		name     string
+		dbType   string
+		schema   string
+		expected string
+	}{
+		{name: "oracle uppercases", dbType: "oracle", schema: "app", expected: "APP"},
+		{name: "dm uppercases", dbType: "dm", schema: "test_schema", expected: "TEST_SCHEMA"},
+		{name: "quoted schema preserved", dbType: "oracle", schema: "\"app\"", expected: "\"app\""},
+		{name: "other database unchanged", dbType: "postgres", schema: "public", expected: "public"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := normalizeSchema(tt.dbType, tt.schema); got != tt.expected {
+				t.Fatalf("normalizeSchema(%q, %q) = %q, want %q", tt.dbType, tt.schema, got, tt.expected)
 			}
 		})
 	}

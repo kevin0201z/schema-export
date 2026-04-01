@@ -118,16 +118,36 @@ func (c *ExportCommand) Run() error {
 
 	fmt.Printf("Successfully processed %d tables\n", len(fullTables))
 
-	// 导出
-	for _, format := range c.Config.Export.Formats {
-		if err := c.exportFormat(fullTables, format); err != nil {
-			fmt.Fprintf(os.Stderr, "Error exporting to %s: %v\n", format, err)
-			continue
-		}
+	if err := c.exportAllFormats(fullTables); err != nil {
+		return err
 	}
 
 	fmt.Println("Export completed successfully!")
 	return nil
+}
+
+func (c *ExportCommand) exportAllFormats(tables []model.Table) error {
+	var failed []string
+	successCount := 0
+
+	for _, format := range c.Config.Export.Formats {
+		if err := c.exportFormat(tables, format); err != nil {
+			fmt.Fprintf(os.Stderr, "Error exporting to %s: %v\n", format, err)
+			failed = append(failed, fmt.Sprintf("%s (%v)", format, err))
+			continue
+		}
+		successCount++
+	}
+
+	if len(failed) == 0 {
+		return nil
+	}
+
+	if successCount == 0 {
+		return fmt.Errorf("all exports failed: %s", strings.Join(failed, "; "))
+	}
+
+	return fmt.Errorf("partial export failure: %s", strings.Join(failed, "; "))
 }
 
 // exportFormat 导出指定格式

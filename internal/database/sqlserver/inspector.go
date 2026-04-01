@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"sort"
 	"strings"
 
 	_ "github.com/microsoft/go-mssqldb" // SQL Server Go 驱动
@@ -296,9 +297,15 @@ func (i *Inspector) GetIndexes(ctx context.Context, tableName string) ([]model.I
 	}
 
 	// 转换为切片
+	names := make([]string, 0, len(indexMap))
+	for name := range indexMap {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
 	indexes := make([]model.Index, 0, len(indexMap))
-	for _, idx := range indexMap {
-		indexes = append(indexes, *idx)
+	for _, name := range names {
+		indexes = append(indexes, *indexMap[name])
 	}
 
 	return indexes, rows.Err()

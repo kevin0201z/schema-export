@@ -1,7 +1,14 @@
 package cli
 
 import (
+	"errors"
+	"fmt"
+	"strings"
 	"testing"
+	"time"
+
+	"github.com/schema-export/schema-export/internal/exporter"
+	"github.com/schema-export/schema-export/internal/model"
 )
 
 func TestParseFormats(t *testing.T) {
@@ -181,6 +188,76 @@ func TestParseOutputPath(t *testing.T) {
 			}
 			if file != tt.expectedFile {
 				t.Errorf("expected file %q, got %q", tt.expectedFile, file)
+			}
+		})
+	}
+}
+
+type testExporter struct {
+	exportErr error
+}
+
+func (e *testExporter) Export(_ []model.Table, _ exporter.ExportOptions) error { return e.exportErr }
+func (e *testExporter) GetName() string                                         { return "test" }
+func (e *testExporter) GetExtension() string                                    { return ".test" }
+
+type testExporterFactory struct {
+	exportErr error
+}
+
+func (f *testExporterFactory) Create() (exporter.Exporter, error) {
+	return &testExporter{exportErr: f.exportErr}, nil
+}
+
+func (f *testExporterFactory) GetType() string { return "test" }
+
+func registerTestExporterFactory(err error) string {
+	name := fmt.Sprintf("test-exporter-%d", time.Now().UnixNano())
+	exporter.Register(name, &testExporterFactory{exportErr: err})
+	return name
+}
+
+func TestExportAllFormats(t *testing.T) {
+	successFormat := registerTestExporterFactory(nil)
+	failedFormat := registerTestExporterFactory(errors.New("boom"))
+
+	tests := []struct {
+		name    string
+		formats []string
+		wantErr string
+	}{
+		{
+			name:    "all succeed",
+			formats: []string{successFormat},
+		},
+		{
+			name:    "partial failure",
+			formats: []string{successFormat, failedFormat},
+			wantErr: "partial export failure",
+		},
+		{
+			name:    "all fail",
+			formats: []string{failedFormat},
+			wantErr: "all exports failed",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cmd := NewExportCommand()
+			cmd.SetFormats(tt.formats)
+
+			err := cmd.exportAllFormats([]model.Table{{Name: "users"}})
+			if tt.wantErr == "" && err != nil {
+				t.Fatalf("expected no error, got %v", err)
+			}
+			if tt.wantErr != "" {
+				if err == nil {
+					t.Fatalf("expected error containing %q", tt.wantErr)
+				}
+				if !strings.Contains(err.Error(), tt.wantErr) {
+					t.Fatalf("expected error containing %q, got %v", tt.wantErr, err)
+				}
 			}
 		})
 	}

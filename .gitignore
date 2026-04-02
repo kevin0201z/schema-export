@@ -5,6 +5,7 @@
 *.so
 *.dylib
 schema-export
+.codex
 
 # Test binary, built with `go test -c`
 *.test

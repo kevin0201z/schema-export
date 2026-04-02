@@ -165,6 +165,21 @@ const (
 		WHERE cons.TABLE_NAME = %s AND cons.CONSTRAINT_TYPE = 'C'
 		ORDER BY cons.CONSTRAINT_NAME
 	`
+
+	// 视图查询
+	queryViewsAllSQL = `
+		SELECT v.VIEW_NAME, c.COMMENTS, v.TEXT
+		FROM ALL_VIEWS v
+		LEFT JOIN ALL_TAB_COMMENTS c ON v.OWNER = c.OWNER AND v.VIEW_NAME = c.TABLE_NAME AND c.TABLE_TYPE = 'VIEW'
+		WHERE v.OWNER = %s
+		ORDER BY v.VIEW_NAME
+	`
+	queryViewsUserSQL = `
+		SELECT v.VIEW_NAME, c.COMMENTS, v.TEXT
+		FROM USER_VIEWS v
+		LEFT JOIN USER_TAB_COMMENTS c ON v.VIEW_NAME = c.TABLE_NAME AND c.TABLE_TYPE = 'VIEW'
+		ORDER BY v.VIEW_NAME
+	`
 )
 
 // OracleCompatibleInspector Oracle 兼容数据库 Inspector 基础实现
@@ -254,6 +269,12 @@ func (o *OracleCompatibleInspector) GetForeignKeys(ctx context.Context, tableNam
 func (o *OracleCompatibleInspector) GetCheckConstraints(ctx context.Context, tableName string) ([]model.CheckConstraint, error) {
 	config := o.GetConfig()
 	return o.queryCheckConstraints(ctx, tableName, config.Schema)
+}
+
+// GetViews 获取视图列表（实现 inspector.Inspector 接口）
+func (o *OracleCompatibleInspector) GetViews(ctx context.Context) ([]model.View, error) {
+	config := o.GetConfig()
+	return o.queryViews(ctx, config.Schema)
 }
 
 // QueryInput 通用查询输入参数
@@ -553,4 +574,42 @@ func (o *OracleCompatibleInspector) placeholderStr(index int) string {
 		return fmt.Sprintf(":%d", index)
 	}
 	return "?"
+}
+
+// queryViews 查询视图列表
+func (o *OracleCompatibleInspector) queryViews(ctx context.Context, schema string) ([]model.View, error) {
+	var query string
+	var args []interface{}
+
+	if schema != "" {
+		query = fmt.Sprintf(queryViewsAllSQL, o.placeholderStr(1))
+		args = append(args, schema)
+	} else {
+		query = queryViewsUserSQL
+	}
+
+	rows, err := o.GetDB().QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var views []model.View
+	for rows.Next() {
+		var view model.View
+		var comment sql.NullString
+		var text sql.NullString
+		if err := rows.Scan(&view.Name, &comment, &text); err != nil {
+			return nil, err
+		}
+		if comment.Valid {
+			view.Comment = comment.String
+		}
+		if text.Valid {
+			view.Definition = text.String
+		}
+		views = append(views, view)
+	}
+
+	return views, rows.Err()
 }

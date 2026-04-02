@@ -88,3 +88,27 @@ const tableTemplate = `## 表: {{.Name}}
 
 ---
 `
+
+// viewTemplate Markdown 视图模板
+const viewTemplate = `## 视图: {{.Name}}
+
+{{if .Comment}}**描述:** {{.Comment}}
+
+{{end -}}
+### 基本信息
+
+| 属性 | 值 |
+|------|-----|
+| 视图名 | {{.Name}} |
+{{- if .Comment }}
+| 描述 | {{.Comment}} |
+{{- end }}
+
+### 视图定义
+
+` + "```sql" + `
+{{.Definition}}
+` + "```" + `
+
+---
+`

@@ -9,6 +9,7 @@
 - **多数据库支持**：达梦（DM）、Oracle、SQL Server、MySQL
 - **多种导出格式**：Markdown、SQL DDL
 - **灵活的导出模式**：单文件或按表分文件导出
+- **视图支持**：导出数据库视图定义
 - **表过滤功能**：包含/排除表、正则表达式匹配
 - **CLI 界面**：易于使用的命令行界面
 - **环境变量**：支持通过环境变量配置
@@ -21,7 +22,7 @@
 go build -o schema-export ./cmd/schema-export
 ```
 
-### 跨平台编译 
+### 跨平台编译
 
 ```bash
 # Linux
@@ -39,7 +40,7 @@ GOOS=darwin GOARCH=amd64 go build -o schema-export-darwin ./cmd/schema-export
 ### 基本用法
 
 ```bash
-# 导出达梦数据库
+# 导出达梦数据库（基本用法）
 ./schema-export export \
   --type dm \
   --host localhost \
@@ -49,117 +50,49 @@ GOOS=darwin GOARCH=amd64 go build -o schema-export-darwin ./cmd/schema-export
   --database DAMENG \
   --output ./docs
 
-# 导出 Oracle 数据库
-./schema-export export \
-  --type oracle \
-  --host localhost \
-  --port 1521 \
-  --username scott \
-  --password tiger \
-  --database ORCL \
-  --output ./docs
-
-# 导出 SQL Server 数据库
-./schema-export export \
-  --type sqlserver \
-  --host localhost \
-  --port 1433 \
-  --username sa \
-  --password mypassword \
-  --database mydb \
-  --output ./docs
-
-# 导出 MySQL 数据库
-./schema-export export \
-  --type mysql \
-  --host localhost \
-  --port 3306 \
-  --database mydb \
-  --username root \
-  --password mypassword \
-  --output ./docs
-
-# 导出指定表
+# 使用 DSN 导出（推荐）
 ./schema-export export \
   --type dm \
-  --host localhost \
-  --username SYSDBA \
-  --password password \
-  --tables users,orders,products \
+  --dsn "dm://SYSDBA:password@localhost:5236?schema=SC" \
   --output ./docs
 
 # 导出 SQL DDL 格式
 ./schema-export export \
   --type dm \
-  --host localhost \
-  --username SYSDBA \
-  --password password \
+  --dsn "dm://SYSDBA:password@localhost:5236" \
   --formats markdown,sql \
+  --output ./docs
+
+# 导出时包含视图
+./schema-export export \
+  --type dm \
+  --dsn "dm://SYSDBA:password@localhost:5236" \
+  -V \
+  --output ./docs
+
+# 导出指定表
+./schema-export export \
+  --type dm \
+  --dsn "dm://SYSDBA:password@localhost:5236" \
+  --tables users,orders,products \
   --output ./docs
 
 # 按表分文件导出
 ./schema-export export \
   --type dm \
-  --host localhost \
-  --username SYSDBA \
-  --password password \
+  --dsn "dm://SYSDBA:password@localhost:5236" \
   --split \
   --output ./docs
-
-# 指定输出文件名（多格式导出时会自动调整扩展名）
-./schema-export export \
-  --type dm \
-  --dsn "dm://SYSDBA:password@localhost:5236?schema=SC" \
-  --formats markdown,sql \
-  --output ./docs/schema.md
-# 将生成：schema.md 和 schema.sql
 ```
-
-### 使用 DSN
-
-```bash
-# 达梦 DSN 格式（推荐指定 schema）
-./schema-export export \
-  --type dm \
-  --dsn "dm://SYSDBA:password@localhost:5236?schema=SC" \
-  --output ./docs
-
-# Oracle DSN 格式
-./schema-export export \
-  --type oracle \
-  --dsn "oracle://scott:tiger@localhost:1521/ORCL" \
-  --schema SCHEMA_NAME \
-  --output ./docs
-
-# SQL Server DSN 格式
-./schema-export export \
-  --type sqlserver \
-  --dsn "sqlserver://sa:mypassword@localhost:1433?database=mydb" \
-  --output ./docs
-
-# MySQL DSN 格式
-./schema-export export \
-  --type mysql \
-  --dsn "root:mypassword@tcp(localhost:3306)/mydb?charset=utf8mb4&parseTime=true" \
-  --output ./docs
-```
-
-> **注意**：
-> - DSN 中的 `schema` 参数会被自动提取
-> - Oracle 使用 `go-ora` 纯 Go 驱动，无需安装 Oracle Instant Client
 
 ### 使用环境变量
 
 ```bash
 export DB_TYPE=dm
-export DB_HOST=localhost
-export DB_PORT=5236
-export DB_USERNAME=SYSDBA
-export DB_PASSWORD=password
-export DB_DATABASE=DAMENG
+export DB_DSN="dm://SYSDBA:password@localhost:5236"
 export EXPORT_OUTPUT=./docs
 export EXPORT_FORMATS=markdown,sql
-export EXPORT_SPLIT=true
+export EXPORT_INCLUDE_VIEWS=true
 
 ./schema-export export
 ```
@@ -178,12 +111,6 @@ export EXPORT_SPLIT=true
 
 # 组合过滤
 ./schema-export export --tables users,orders --exclude orders_archive
-
-# 导出指定 schema 下以 tb_ 开头的表
-./schema-export export \
-  --type dm \
-  --dsn "dm://SYSDBA:password@localhost:5236?schema=SC" \
-  --patterns "^tb_"
 ```
 
 ## CLI 参考
@@ -213,22 +140,24 @@ export EXPORT_SPLIT=true
 | `--tables`   | <br />   | 要导出的表（逗号分隔）                     |
 | `--exclude`  | <br />   | 要排除的表（逗号分隔）                     |
 | `--patterns` | <br />   | 表名正则匹配模式                        |
+| `-V, --include-views` | false | 包含视图导出                      |
 
 ## 环境变量
 
-| 变量               | 说明                |
-| ---------------- | ----------------- |
-| `DB_TYPE`        | 数据库类型             |
-| `DB_HOST`        | 数据库主机             |
-| `DB_PORT`        | 数据库端口             |
-| `DB_DATABASE`    | 数据库名              |
-| `DB_USERNAME`    | 数据库用户名            |
-| `DB_PASSWORD`    | 数据库密码             |
-| `DB_DSN`         | DSN 连接字符串         |
-| `DB_SCHEMA`      | 数据库 Schema        |
-| `EXPORT_OUTPUT`  | 输出目录              |
-| `EXPORT_FORMATS` | 导出格式（逗号分隔）        |
-| `EXPORT_SPLIT`   | 分文件导出（true/false） |
+| 变量                    | 说明                  |
+| --------------------- | ------------------- |
+| `DB_TYPE`             | 数据库类型               |
+| `DB_HOST`             | 数据库主机               |
+| `DB_PORT`             | 数据库端口               |
+| `DB_DATABASE`         | 数据库名                |
+| `DB_USERNAME`         | 数据库用户名              |
+| `DB_PASSWORD`         | 数据库密码               |
+| `DB_DSN`              | DSN 连接字符串           |
+| `DB_SCHEMA`           | 数据库 Schema          |
+| `EXPORT_OUTPUT`       | 输出目录                |
+| `EXPORT_FORMATS`      | 导出格式（逗号分隔）          |
+| `EXPORT_SPLIT`        | 分文件导出（true/false）   |
+| `EXPORT_INCLUDE_VIEWS` | 包含视图导出（true/false） |
 
 ## 输出说明
 
@@ -307,7 +236,7 @@ export EXPORT_SPLIT=true
 
 ## 架构
 
-项目采用“CLI 负责入口、应用服务负责编排、Inspector/Exporter 负责扩展点”的分层结构。
+项目采用"CLI 负责入口、应用服务负责编排、Inspector/Exporter 负责扩展点"的分层结构。
 
 这样的拆分有两个目的：
 

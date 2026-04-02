@@ -144,6 +144,15 @@ func (d *SQLServerDialect) GetTableCommentSQL(tableName string, comment string) 
 		escapedComment, tableName)
 }
 
+func (d *SQLServerDialect) GetViewCommentSQL(viewName string, comment string) string {
+	if comment == "" {
+		return ""
+	}
+	escapedComment := strings.ReplaceAll(comment, "'", "''")
+	return fmt.Sprintf("EXEC sp_addextendedproperty 'MS_Description', N'%s', 'SCHEMA', 'dbo', 'VIEW', '%s';",
+		escapedComment, viewName)
+}
+
 func (d *SQLServerDialect) SupportsInlineComment() bool {
 	return false
 }

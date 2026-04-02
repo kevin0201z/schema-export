@@ -33,6 +33,9 @@ type Inspector interface {
 
 	// GetCheckConstraints 获取表 CHECK 约束列表
 	GetCheckConstraints(ctx context.Context, tableName string) ([]model.CheckConstraint, error)
+
+	// GetViews 获取视图列表
+	GetViews(ctx context.Context) ([]model.View, error)
 }
 
 // InspectorFactory Inspector 工厂接口

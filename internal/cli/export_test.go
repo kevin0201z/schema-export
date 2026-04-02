@@ -198,9 +198,11 @@ type testExporter struct {
 	exportErr error
 }
 
-func (e *testExporter) Export(_ []model.Table, _ exporter.ExportOptions) error { return e.exportErr }
-func (e *testExporter) GetName() string                                        { return "test" }
-func (e *testExporter) GetExtension() string                                   { return ".test" }
+func (e *testExporter) Export(_ []model.Table, _ []model.View, _ exporter.ExportOptions) error {
+	return e.exportErr
+}
+func (e *testExporter) GetName() string      { return "test" }
+func (e *testExporter) GetExtension() string { return ".test" }
 
 type testExporterFactory struct {
 	exportErr error
@@ -248,7 +250,7 @@ func TestExportAllFormats(t *testing.T) {
 			cmd := NewExportCommand()
 			cmd.SetFormats(tt.formats)
 
-			err := exportapp.NewService(cmd.Config).ExportAllFormats([]model.Table{{Name: "users"}})
+			err := exportapp.NewService(cmd.Config).ExportAllFormats([]model.Table{{Name: "users"}}, nil)
 			if tt.wantErr == "" && err != nil {
 				t.Fatalf("expected no error, got %v", err)
 			}

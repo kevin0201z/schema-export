@@ -13,12 +13,13 @@ import (
 
 // Exporter Markdown 导出器
 type Exporter struct {
-	template *template.Template
+	tableTemplate *template.Template
+	viewTemplate  *template.Template
 }
 
 // NewExporter 创建 Markdown 导出器
 func NewExporter() *Exporter {
-	tmpl := template.Must(template.New("markdown").Funcs(template.FuncMap{
+	funcMap := template.FuncMap{
 		"join":       strings.Join,
 		"toLower":    strings.ToLower,
 		"hasPrefix":  strings.HasPrefix,
@@ -26,43 +27,39 @@ func NewExporter() *Exporter {
 		"contains":   strings.Contains,
 		"trimPrefix": strings.TrimPrefix,
 		"trimSuffix": strings.TrimSuffix,
-	}).Parse(tableTemplate))
+	}
 
 	return &Exporter{
-		template: tmpl,
+		tableTemplate: template.Must(template.New("table").Funcs(funcMap).Parse(tableTemplate)),
+		viewTemplate:  template.Must(template.New("view").Funcs(funcMap).Parse(viewTemplate)),
 	}
 }
 
-// Export 导出表结构
-func (e *Exporter) Export(tables []model.Table, options exporter.ExportOptions) error {
+// Export 导出表结构和视图
+func (e *Exporter) Export(tables []model.Table, views []model.View, options exporter.ExportOptions) error {
 	if options.SplitFiles {
-		return e.exportSplitFiles(tables, options)
+		return e.exportSplitFiles(tables, views, options)
 	}
-	return e.exportSingleFile(tables, options)
+	return e.exportSingleFile(tables, views, options)
 }
 
 // exportSingleFile 导出到单个文件
-func (e *Exporter) exportSingleFile(tables []model.Table, options exporter.ExportOptions) error {
+func (e *Exporter) exportSingleFile(tables []model.Table, views []model.View, options exporter.ExportOptions) error {
 	outputPath := filepath.Join(options.OutputDir, options.FileName)
 	if outputPath == "" || outputPath == options.OutputDir {
 		outputPath = filepath.Join(options.OutputDir, "schema.md")
 	}
 
-	// 检查输出路径状态
 	info, err := os.Stat(outputPath)
 	if err == nil && info.IsDir() {
-		// outputPath 是目录，在目录下创建文件
 		outputPath = filepath.Join(outputPath, "schema.md")
 	}
-	// 文件已存在时直接覆盖，不再报错
 
-	// 确保父目录存在
 	dir := filepath.Dir(outputPath)
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return fmt.Errorf("failed to create output directory: %w", err)
 	}
 
-	// 检查父目录是否确实是目录
 	info, err = os.Stat(dir)
 	if err != nil || !info.IsDir() {
 		return fmt.Errorf("output path %s is not a valid directory", dir)
@@ -74,14 +71,16 @@ func (e *Exporter) exportSingleFile(tables []model.Table, options exporter.Expor
 	}
 	defer file.Close()
 
-	// 写入文件头
 	fmt.Fprintln(file, "# 数据库结构文档")
 	fmt.Fprintln(file, "")
 	fmt.Fprintf(file, "**总表数:** %d\n\n", len(tables))
+	if options.IncludeViews {
+		fmt.Fprintf(file, "**总视图数:** %d\n\n", len(views))
+	}
 
-	// 写入 Schema 概览
 	fmt.Fprintln(file, "## 概览")
 	fmt.Fprintln(file, "")
+
 	fmt.Fprintln(file, "### 表清单")
 	fmt.Fprintln(file, "")
 	for _, table := range tables {
@@ -93,27 +92,62 @@ func (e *Exporter) exportSingleFile(tables []model.Table, options exporter.Expor
 	}
 	fmt.Fprintln(file, "")
 
-	// 写入详细目录
+	if options.IncludeViews && len(views) > 0 {
+		fmt.Fprintln(file, "### 视图清单")
+		fmt.Fprintln(file, "")
+		for _, view := range views {
+			if view.Comment != "" {
+				fmt.Fprintf(file, "- **%s**: %s\n", view.Name, view.Comment)
+			} else {
+				fmt.Fprintf(file, "- **%s**\n", view.Name)
+			}
+		}
+		fmt.Fprintln(file, "")
+	}
+
 	fmt.Fprintln(file, "### 目录")
+	fmt.Fprintln(file, "")
+	fmt.Fprintln(file, "#### 表")
 	fmt.Fprintln(file, "")
 	for _, table := range tables {
 		fmt.Fprintf(file, "- [%s](#表-%s)\n", table.Name, strings.ToLower(table.Name))
 	}
 	fmt.Fprintln(file, "")
 
-	// 写入每个表的详细信息
+	if options.IncludeViews && len(views) > 0 {
+		fmt.Fprintln(file, "#### 视图")
+		fmt.Fprintln(file, "")
+		for _, view := range views {
+			fmt.Fprintf(file, "- [%s](#视图-%s)\n", view.Name, strings.ToLower(view.Name))
+		}
+		fmt.Fprintln(file, "")
+	}
+
+	fmt.Fprintln(file, "## 表详情")
+	fmt.Fprintln(file, "")
 	for _, table := range tables {
-		if err := e.template.Execute(file, table); err != nil {
+		if err := e.tableTemplate.Execute(file, table); err != nil {
 			return fmt.Errorf("failed to execute template: %w", err)
 		}
 		fmt.Fprintln(file, "")
+	}
+
+	if options.IncludeViews && len(views) > 0 {
+		fmt.Fprintln(file, "## 视图详情")
+		fmt.Fprintln(file, "")
+		for _, view := range views {
+			if err := e.viewTemplate.Execute(file, view); err != nil {
+				return fmt.Errorf("failed to execute view template: %w", err)
+			}
+			fmt.Fprintln(file, "")
+		}
 	}
 
 	return nil
 }
 
 // exportSplitFiles 分文件导出
-func (e *Exporter) exportSplitFiles(tables []model.Table, options exporter.ExportOptions) error {
+func (e *Exporter) exportSplitFiles(tables []model.Table, views []model.View, options exporter.ExportOptions) error {
 	markdownDir := filepath.Join(options.OutputDir, "markdown")
 	if err := os.MkdirAll(markdownDir, 0755); err != nil {
 		return fmt.Errorf("failed to create markdown directory: %w", err)
@@ -126,14 +160,31 @@ func (e *Exporter) exportSplitFiles(tables []model.Table, options exporter.Expor
 			return fmt.Errorf("failed to create file %s: %w", outputPath, err)
 		}
 
-		// 写入单个文件的头部
 		fmt.Fprintf(file, "# 表: %s\n\n", table.Name)
 
-		if err := e.template.Execute(file, table); err != nil {
+		if err := e.tableTemplate.Execute(file, table); err != nil {
 			file.Close()
 			return fmt.Errorf("failed to execute template: %w", err)
 		}
 		file.Close()
+	}
+
+	if options.IncludeViews {
+		for _, view := range views {
+			outputPath := filepath.Join(markdownDir, view.Name+"_view.md")
+			file, err := os.Create(outputPath)
+			if err != nil {
+				return fmt.Errorf("failed to create file %s: %w", outputPath, err)
+			}
+
+			fmt.Fprintf(file, "# 视图: %s\n\n", view.Name)
+
+			if err := e.viewTemplate.Execute(file, view); err != nil {
+				file.Close()
+				return fmt.Errorf("failed to execute view template: %w", err)
+			}
+			file.Close()
+		}
 	}
 
 	return nil

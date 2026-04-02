@@ -97,6 +97,15 @@ func (d *GenericDialect) GetTableCommentSQL(tableName string, comment string) st
 		strings.ReplaceAll(comment, "'", "''"))
 }
 
+func (d *GenericDialect) GetViewCommentSQL(viewName string, comment string) string {
+	if comment == "" {
+		return ""
+	}
+	return fmt.Sprintf("COMMENT ON VIEW %s IS '%s';",
+		d.QuoteIdentifier(viewName),
+		strings.ReplaceAll(comment, "'", "''"))
+}
+
 func (d *GenericDialect) SupportsInlineComment() bool {
 	return false
 }

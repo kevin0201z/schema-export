@@ -28,6 +28,9 @@ type Dialect interface {
 	// GetTableCommentSQL 获取表注释 SQL 语句
 	GetTableCommentSQL(tableName string, comment string) string
 
+	// GetViewCommentSQL 获取视图注释 SQL 语句
+	GetViewCommentSQL(viewName string, comment string) string
+
 	// SupportsInlineComment 是否支持内联注释（MySQL 支持在字段定义中写注释）
 	SupportsInlineComment() bool
 

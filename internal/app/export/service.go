@@ -86,7 +86,17 @@ func (s *Service) Run() error {
 
 	fmt.Printf("Successfully processed %d tables\n", len(fullTables))
 
-	if err := s.ExportAllFormats(fullTables); err != nil {
+	var views []model.View
+	if s.Config.Export.IncludeViews {
+		views, err = ins.GetViews(ctx)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to get views: %v\n", err)
+		} else {
+			fmt.Printf("Found %d views\n", len(views))
+		}
+	}
+
+	if err := s.ExportAllFormats(fullTables, views); err != nil {
 		return err
 	}
 
@@ -118,12 +128,12 @@ func (s *Service) loadTables(ctx context.Context, ins inspector.Inspector, table
 }
 
 // ExportAllFormats 导出所有格式。
-func (s *Service) ExportAllFormats(tables []model.Table) error {
+func (s *Service) ExportAllFormats(tables []model.Table, views []model.View) error {
 	var failed []string
 	successCount := 0
 
 	for _, format := range s.Config.Export.Formats {
-		if err := s.exportFormat(tables, format); err != nil {
+		if err := s.exportFormat(tables, views, format); err != nil {
 			fmt.Fprintf(os.Stderr, "Error exporting to %s: %v\n", format, err)
 			failed = append(failed, fmt.Sprintf("%s (%v)", format, err))
 			continue
@@ -142,7 +152,7 @@ func (s *Service) ExportAllFormats(tables []model.Table) error {
 	return fmt.Errorf("partial export failure: %s", strings.Join(failed, "; "))
 }
 
-func (s *Service) exportFormat(tables []model.Table, format string) error {
+func (s *Service) exportFormat(tables []model.Table, views []model.View, format string) error {
 	factory, ok := exporter.GetFactory(format)
 	if !ok {
 		return fmt.Errorf("unsupported export format: %s", format)
@@ -155,13 +165,14 @@ func (s *Service) exportFormat(tables []model.Table, format string) error {
 
 	outputDir, fileName := ParseOutputPath(s.Config.Export.OutputDir, format)
 	options := exporter.ExportOptions{
-		OutputDir:  outputDir,
-		FileName:   fileName,
-		SplitFiles: s.Config.Export.SplitFiles,
-		DbType:     s.Config.Database.Type,
+		OutputDir:    outputDir,
+		FileName:     fileName,
+		SplitFiles:   s.Config.Export.SplitFiles,
+		DbType:       s.Config.Database.Type,
+		IncludeViews: s.Config.Export.IncludeViews,
 	}
 
-	if err := exp.Export(tables, options); err != nil {
+	if err := exp.Export(tables, views, options); err != nil {
 		return fmt.Errorf("export failed: %w", err)
 	}
 

@@ -160,6 +160,12 @@ func (d *MySQLDialect) GetTableCommentSQL(tableName string, comment string) stri
 	return fmt.Sprintf("ALTER TABLE %s COMMENT = '%s';", d.QuoteIdentifier(tableName), escapedComment)
 }
 
+func (d *MySQLDialect) GetViewCommentSQL(viewName string, comment string) string {
+	// MySQL 视图不支持直接添加注释，需要通过 ALTER VIEW 重定义
+	// 这里返回空，因为视图定义已经包含了所有信息
+	return ""
+}
+
 func (d *MySQLDialect) SupportsInlineComment() bool {
 	return true
 }

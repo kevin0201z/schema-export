@@ -415,6 +415,48 @@ func (i *Inspector) GetCheckConstraints(ctx context.Context, tableName string) (
 	return result, rows.Err()
 }
 
+// GetViews 获取视图列表
+func (i *Inspector) GetViews(ctx context.Context) ([]model.View, error) {
+	query := `
+		SELECT 
+			v.name AS view_name,
+			CAST(ep.value AS NVARCHAR(MAX)) AS view_comment,
+			CAST(m.definition AS NVARCHAR(MAX)) AS view_definition
+		FROM sys.views v
+		LEFT JOIN sys.sql_modules m ON v.object_id = m.object_id
+		LEFT JOIN sys.extended_properties ep 
+			ON v.object_id = ep.major_id 
+			AND ep.minor_id = 0 
+			AND ep.name = 'MS_Description'
+		WHERE v.is_ms_shipped = 0
+		ORDER BY v.name
+	`
+
+	rows, err := i.GetDB().QueryContext(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query views: %w", err)
+	}
+	defer rows.Close()
+
+	var views []model.View
+	for rows.Next() {
+		var view model.View
+		var comment, definition sql.NullString
+		if err := rows.Scan(&view.Name, &comment, &definition); err != nil {
+			return nil, err
+		}
+		if comment.Valid {
+			view.Comment = comment.String
+		}
+		if definition.Valid {
+			view.Definition = definition.String
+		}
+		views = append(views, view)
+	}
+
+	return views, rows.Err()
+}
+
 // getTableComment 获取表注释
 func (i *Inspector) getTableComment(ctx context.Context, tableName string) (string, error) {
 	query := `

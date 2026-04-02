@@ -76,6 +76,7 @@ func newExportCmd() *cobra.Command {
 	exportCmd.Flags().StringSliceVar(&cmd.Config.Export.Tables, "tables", nil, "Tables to export (comma-separated)")
 	exportCmd.Flags().StringSliceVar(&cmd.Config.Export.Exclude, "exclude", nil, "Tables to exclude (comma-separated)")
 	exportCmd.Flags().StringSliceVar(&cmd.Config.Export.Patterns, "patterns", nil, "Table name patterns to match (regex)")
+	exportCmd.Flags().BoolVarP(&cmd.Config.Export.IncludeViews, "include-views", "V", false, "Include views in export")
 
 	return exportCmd
 }

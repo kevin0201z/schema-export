@@ -132,6 +132,15 @@ func (d *OracleDialect) GetTableCommentSQL(tableName string, comment string) str
 		strings.ReplaceAll(comment, "'", "''"))
 }
 
+func (d *OracleDialect) GetViewCommentSQL(viewName string, comment string) string {
+	if comment == "" {
+		return ""
+	}
+	return fmt.Sprintf("COMMENT ON TABLE %s IS '%s';",
+		d.QuoteIdentifier(viewName),
+		strings.ReplaceAll(comment, "'", "''"))
+}
+
 func (d *OracleDialect) SupportsInlineComment() bool {
 	return false
 }

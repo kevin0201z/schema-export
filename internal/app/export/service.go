@@ -158,6 +158,7 @@ func (s *Service) exportFormat(tables []model.Table, format string) error {
 		OutputDir:  outputDir,
 		FileName:   fileName,
 		SplitFiles: s.Config.Export.SplitFiles,
+		DbType:     s.Config.Database.Type,
 	}
 
 	if err := exp.Export(tables, options); err != nil {

@@ -154,6 +154,13 @@ func (i *Inspector) GetTable(ctx context.Context, tableName string) (*model.Tabl
 	}
 	table.ForeignKeys = foreignKeys
 
+	// 获取 CHECK 约束
+	checkConstraints, err := i.GetCheckConstraints(ctx, tableName)
+	if err != nil {
+		return nil, err
+	}
+	table.CheckConstraints = checkConstraints
+
 	return table, nil
 }
 
@@ -355,6 +362,57 @@ func (i *Inspector) GetForeignKeys(ctx context.Context, tableName string) ([]mod
 	}
 
 	return foreignKeys, rows.Err()
+}
+
+// GetCheckConstraints 获取表 CHECK 约束列表
+func (i *Inspector) GetCheckConstraints(ctx context.Context, tableName string) ([]model.CheckConstraint, error) {
+	query := `
+		SELECT 
+			cc.name AS constraint_name,
+			cc.definition AS definition,
+			c.name AS column_name
+		FROM sys.check_constraints cc
+		LEFT JOIN sys.columns c ON cc.parent_column_id = c.column_id AND cc.parent_object_id = c.object_id
+		INNER JOIN sys.tables t ON cc.parent_object_id = t.object_id
+		WHERE t.name = @p1
+		ORDER BY cc.name
+	`
+
+	rows, err := i.GetDB().QueryContext(ctx, query, tableName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query check constraints: %w", err)
+	}
+	defer rows.Close()
+
+	constraintMap := make(map[string]*model.CheckConstraint)
+	for rows.Next() {
+		var name, definition string
+		var columnName sql.NullString
+		if err := rows.Scan(&name, &definition, &columnName); err != nil {
+			return nil, err
+		}
+
+		cc, exists := constraintMap[name]
+		if !exists {
+			cc = &model.CheckConstraint{
+				Name:       name,
+				Definition: definition,
+				Columns:    []string{},
+			}
+			constraintMap[name] = cc
+		}
+		if columnName.Valid && columnName.String != "" {
+			cc.Columns = append(cc.Columns, columnName.String)
+		}
+	}
+
+	// 转换为切片
+	result := make([]model.CheckConstraint, 0, len(constraintMap))
+	for _, cc := range constraintMap {
+		result = append(result, *cc)
+	}
+
+	return result, rows.Err()
 }
 
 // getTableComment 获取表注释

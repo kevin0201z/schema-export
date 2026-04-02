@@ -30,6 +30,9 @@ type Inspector interface {
 
 	// GetForeignKeys 获取表外键列表
 	GetForeignKeys(ctx context.Context, tableName string) ([]model.ForeignKey, error)
+
+	// GetCheckConstraints 获取表 CHECK 约束列表
+	GetCheckConstraints(ctx context.Context, tableName string) ([]model.CheckConstraint, error)
 }
 
 // InspectorFactory Inspector 工厂接口

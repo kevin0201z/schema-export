@@ -4,16 +4,18 @@ import "fmt"
 
 // Column 字段元数据
 type Column struct {
-	Name            string // 字段名
-	DataType        string // 数据类型
-	Length          int    // 长度（适用于字符串类型）
-	Precision       int    // 精度（适用于数值类型）
-	Scale           int    // 小数位数（适用于数值类型）
-	IsPrimaryKey    bool   // 是否主键
-	IsAutoIncrement bool   // 是否自增
-	IsNullable      bool   // 是否可空
-	DefaultValue    string // 默认值
-	Comment         string // 字段注释
+	Name            string   // 字段名
+	DataType        string   // 数据类型
+	Length          int      // 长度（适用于字符串类型）
+	Precision       int      // 精度（适用于数值类型）
+	Scale           int      // 小数位数（适用于数值类型）
+	IsPrimaryKey    bool     // 是否主键
+	IsAutoIncrement bool     // 是否自增
+	IsNullable      bool     // 是否可空
+	DefaultValue    string   // 默认值
+	Comment         string   // 字段注释
+	CheckConstraint string   // CHECK 约束表达式（字段级）
+	EnumValues      []string // ENUM 枚举值列表（MySQL）
 }
 
 // 预定义的类型集合，使用 map 提高查找效率

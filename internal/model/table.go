@@ -10,13 +10,14 @@ const (
 
 // Table 表结构元数据
 type Table struct {
-	Name        string       // 表名
-	Comment     string       // 表注释
-	Type        TableType    // 表类型（表/视图）
-	Columns     []Column     // 字段列表
-	Indexes     []Index      // 索引列表
-	ForeignKeys []ForeignKey // 外键列表
-	primaryKey  *Column      // 缓存主键字段
+	Name             string            // 表名
+	Comment          string            // 表注释
+	Type             TableType         // 表类型（表/视图）
+	Columns          []Column          // 字段列表
+	Indexes          []Index           // 索引列表
+	ForeignKeys      []ForeignKey      // 外键列表
+	CheckConstraints []CheckConstraint // 表级 CHECK 约束列表
+	primaryKey       *Column           // 缓存主键字段
 }
 
 // GetPrimaryKey 获取主键字段（带缓存）

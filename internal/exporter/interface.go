@@ -23,6 +23,7 @@ type ExportOptions struct {
 	SplitFiles bool     // 是否分文件导出
 	Tables     []string // 指定导出的表（空表示全部）
 	Exclude    []string // 排除的表
+	DbType     string   // 数据库类型（用于选择方言）
 }
 
 // ExporterFactory 导出器工厂接口

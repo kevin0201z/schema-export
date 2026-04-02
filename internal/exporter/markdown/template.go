@@ -14,7 +14,9 @@ const tableTemplate = `## 表: {{.Name}}
 |------|-----|
 | 表名 | {{.Name}} |
 | 类型 | {{.Type}} |
-{{if .Comment}}| 描述 | {{.Comment}} |{{end}}
+{{- if .Comment }}
+| 描述 | {{.Comment}} |
+{{- end }}
 | 字段数 | {{len .Columns}} |
 | 索引数 | {{len .Indexes}} |
 | 外键数 | {{len .ForeignKeys}} |

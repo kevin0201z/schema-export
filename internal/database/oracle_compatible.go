@@ -143,6 +143,28 @@ const (
 	// 表注释查询
 	queryTableCommentAllSQL  = `SELECT COMMENTS FROM ALL_TAB_COMMENTS WHERE TABLE_NAME = %s AND OWNER = %s`
 	queryTableCommentUserSQL = `SELECT COMMENTS FROM USER_TAB_COMMENTS WHERE TABLE_NAME = %s`
+
+	// CHECK 约束查询
+	queryCheckConstraintsAllSQL = `
+		SELECT 
+			cons.CONSTRAINT_NAME,
+			cons.SEARCH_CONDITION,
+			cc.COLUMN_NAME
+		FROM ALL_CONSTRAINTS cons
+		LEFT JOIN ALL_CONS_COLUMNS cc ON cons.OWNER = cc.OWNER AND cons.CONSTRAINT_NAME = cc.CONSTRAINT_NAME
+		WHERE cons.TABLE_NAME = %s AND cons.OWNER = %s AND cons.CONSTRAINT_TYPE = 'C'
+		ORDER BY cons.CONSTRAINT_NAME
+	`
+	queryCheckConstraintsUserSQL = `
+		SELECT 
+			cons.CONSTRAINT_NAME,
+			cons.SEARCH_CONDITION,
+			cc.COLUMN_NAME
+		FROM USER_CONSTRAINTS cons
+		LEFT JOIN USER_CONS_COLUMNS cc ON cons.CONSTRAINT_NAME = cc.CONSTRAINT_NAME
+		WHERE cons.TABLE_NAME = %s AND cons.CONSTRAINT_TYPE = 'C'
+		ORDER BY cons.CONSTRAINT_NAME
+	`
 )
 
 // OracleCompatibleInspector Oracle 兼容数据库 Inspector 基础实现
@@ -200,6 +222,13 @@ func (o *OracleCompatibleInspector) GetTable(ctx context.Context, tableName stri
 	}
 	table.ForeignKeys = foreignKeys
 
+	// 获取 CHECK 约束
+	checkConstraints, err := o.GetCheckConstraints(ctx, tableName)
+	if err != nil {
+		return nil, err
+	}
+	table.CheckConstraints = checkConstraints
+
 	return table, nil
 }
 
@@ -219,6 +248,12 @@ func (o *OracleCompatibleInspector) GetIndexes(ctx context.Context, tableName st
 func (o *OracleCompatibleInspector) GetForeignKeys(ctx context.Context, tableName string) ([]model.ForeignKey, error) {
 	config := o.GetConfig()
 	return o.queryForeignKeys(ctx, tableName, config.Schema)
+}
+
+// GetCheckConstraints 获取表 CHECK 约束列表（实现 inspector.Inspector 接口）
+func (o *OracleCompatibleInspector) GetCheckConstraints(ctx context.Context, tableName string) ([]model.CheckConstraint, error) {
+	config := o.GetConfig()
+	return o.queryCheckConstraints(ctx, tableName, config.Schema)
 }
 
 // QueryInput 通用查询输入参数
@@ -460,6 +495,56 @@ func (o *OracleCompatibleInspector) queryTableComment(ctx context.Context, table
 		return comment.String, nil
 	}
 	return "", nil
+}
+
+// queryCheckConstraints 查询表 CHECK 约束
+func (o *OracleCompatibleInspector) queryCheckConstraints(ctx context.Context, tableName, schema string) ([]model.CheckConstraint, error) {
+	var query string
+	var args []interface{}
+
+	if schema != "" {
+		query = fmt.Sprintf(queryCheckConstraintsAllSQL, o.placeholderStr(1), o.placeholderStr(2))
+		args = append(args, tableName, schema)
+	} else {
+		query = fmt.Sprintf(queryCheckConstraintsUserSQL, o.placeholderStr(1))
+		args = append(args, tableName)
+	}
+
+	rows, err := o.GetDB().QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	constraintMap := make(map[string]*model.CheckConstraint)
+	for rows.Next() {
+		var name, definition string
+		var columnName sql.NullString
+		if err := rows.Scan(&name, &definition, &columnName); err != nil {
+			return nil, err
+		}
+
+		cc, exists := constraintMap[name]
+		if !exists {
+			cc = &model.CheckConstraint{
+				Name:       name,
+				Definition: definition,
+				Columns:    []string{},
+			}
+			constraintMap[name] = cc
+		}
+		if columnName.Valid && columnName.String != "" {
+			cc.Columns = append(cc.Columns, columnName.String)
+		}
+	}
+
+	// 转换为切片
+	result := make([]model.CheckConstraint, 0, len(constraintMap))
+	for _, cc := range constraintMap {
+		result = append(result, *cc)
+	}
+
+	return result, rows.Err()
 }
 
 // placeholderStr 获取占位符字符串

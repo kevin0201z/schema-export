@@ -2,12 +2,12 @@
 
 一个当前支持达梦数据库（DM）、Oracle、SQL Server、MySQL 的跨数据库结构导出工具。
 
-可生成 Markdown 和 SQL DDL 格式的数据库结构文档。
+可生成 Markdown、SQL DDL、JSON、YAML 格式的数据库结构文档。
 
 ## 功能特性
 
 - **多数据库支持**：达梦（DM）、Oracle、SQL Server、MySQL
-- **多种导出格式**：Markdown、SQL DDL
+- **多种导出格式**：Markdown、SQL DDL、JSON、YAML
 - **灵活的导出模式**：单文件或按表分文件导出
 - **视图支持**：导出数据库视图定义
 - **表过滤功能**：包含/排除表、正则表达式匹配
@@ -61,6 +61,13 @@ GOOS=darwin GOARCH=amd64 go build -o schema-export-darwin ./cmd/schema-export
   --type dm \
   --dsn "dm://SYSDBA:password@localhost:5236" \
   --formats markdown,sql \
+  --output ./docs
+
+# 导出 JSON/YAML 格式（便于程序化处理）
+./schema-export export \
+  --type dm \
+  --dsn "dm://SYSDBA:password@localhost:5236" \
+  --formats json,yaml \
   --output ./docs
 
 # 导出时包含视图
@@ -135,7 +142,7 @@ export EXPORT_INCLUDE_VIEWS=true
 | `--dsn`      | <br />   | DSN 连接字符串                       |
 | `--schema`   | <br />   | 数据库 Schema                      |
 | `--output`   | ./output | 输出目录或文件路径                       |
-| `--formats`  | markdown | 导出格式（逗号分隔：markdown,sql）         |
+| `--formats`  | markdown | 导出格式（逗号分隔：markdown,sql,json,yaml）   |
 | `--split`    | false    | 按表分文件导出                         |
 | `--tables`   | <br />   | 要导出的表（逗号分隔）                     |
 | `--exclude`  | <br />   | 要排除的表（逗号分隔）                     |

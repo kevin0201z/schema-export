@@ -9,6 +9,7 @@ import (
 
 	// 导入驱动注册
 	_ "github.com/schema-export/schema-export/internal/database/dm"
+	_ "github.com/schema-export/schema-export/internal/database/mysql"
 	_ "github.com/schema-export/schema-export/internal/database/oracle"
 	_ "github.com/schema-export/schema-export/internal/database/sqlserver"
 
@@ -34,7 +35,7 @@ func newRootCmd() *cobra.Command {
 	rootCmd := &cobra.Command{
 		Use:   "schema-export",
 		Short: "Database schema export tool",
-		Long: `A cross-database schema export tool that currently supports DM, Oracle, and SQL Server.
+		Long: `A cross-database schema export tool that supports DM, Oracle, SQL Server, and MySQL.
 		
 Generate database structure documentation in Markdown and SQL DDL formats.`,
 		Version: fmt.Sprintf("%s (commit: %s, built: %s)", version, commit, date),
@@ -59,7 +60,7 @@ func newExportCmd() *cobra.Command {
 	}
 
 	// 数据库连接参数
-	exportCmd.Flags().StringVar(&cmd.Config.Database.Type, "type", "dm", "Database type (dm, oracle, sqlserver)")
+	exportCmd.Flags().StringVar(&cmd.Config.Database.Type, "type", "dm", "Database type (dm, oracle, sqlserver, mysql)")
 	exportCmd.Flags().StringVar(&cmd.Config.Database.Host, "host", "", "Database host")
 	exportCmd.Flags().IntVar(&cmd.Config.Database.Port, "port", 0, "Database port")
 	exportCmd.Flags().StringVar(&cmd.Config.Database.Database, "database", "", "Database name")

@@ -1,12 +1,12 @@
 # 数据库结构导出工具
 
-一个当前支持达梦数据库（DM）、Oracle、SQL Server 的跨数据库结构导出工具。
+一个当前支持达梦数据库（DM）、Oracle、SQL Server、MySQL 的跨数据库结构导出工具。
 
 可生成 Markdown 和 SQL DDL 格式的数据库结构文档。
 
 ## 功能特性
 
-- **多数据库支持**：达梦（DM）、Oracle、SQL Server
+- **多数据库支持**：达梦（DM）、Oracle、SQL Server、MySQL
 - **多种导出格式**：Markdown、SQL DDL
 - **灵活的导出模式**：单文件或按表分文件导出
 - **表过滤功能**：包含/排除表、正则表达式匹配
@@ -69,6 +69,16 @@ GOOS=darwin GOARCH=amd64 go build -o schema-export-darwin ./cmd/schema-export
   --database mydb \
   --output ./docs
 
+# 导出 MySQL 数据库
+./schema-export export \
+  --type mysql \
+  --host localhost \
+  --port 3306 \
+  --database mydb \
+  --username root \
+  --password mypassword \
+  --output ./docs
+
 # 导出指定表
 ./schema-export export \
   --type dm \
@@ -125,6 +135,12 @@ GOOS=darwin GOARCH=amd64 go build -o schema-export-darwin ./cmd/schema-export
 ./schema-export export \
   --type sqlserver \
   --dsn "sqlserver://sa:mypassword@localhost:1433?database=mydb" \
+  --output ./docs
+
+# MySQL DSN 格式
+./schema-export export \
+  --type mysql \
+  --dsn "root:mypassword@tcp(localhost:3306)/mydb?charset=utf8mb4&parseTime=true" \
   --output ./docs
 ```
 
@@ -183,7 +199,7 @@ export EXPORT_SPLIT=true
 
 | 参数           | 默认值      | 说明                              |
 | ------------ | -------- | ------------------------------- |
-| `--type`     | dm       | 数据库类型（dm、oracle、sqlserver） |
+| `--type`     | dm       | 数据库类型（dm、oracle、sqlserver、mysql） |
 | `--host`     | <br />   | 数据库主机                           |
 | `--port`     | 0        | 数据库端口                           |
 | `--database` | <br />   | 数据库名                            |
@@ -285,8 +301,9 @@ export EXPORT_SPLIT=true
 | 达梦（DM）     | ✅ 已支持  | dm-go-driver（纯 Go 驱动） |
 | Oracle     | ✅ 已支持  | go-ora（纯 Go 驱动）       |
 | SQL Server | ✅ 已支持  | go-mssqldb（纯 Go 驱动）   |
+| MySQL      | ✅ 已支持  | go-sql-driver/mysql（纯 Go 驱动） |
 
-后续如需扩展 MySQL、PostgreSQL、SQLite，可通过新增对应 Inspector 实现接入。
+后续如需扩展 PostgreSQL、SQLite，可通过新增对应 Inspector 实现接入。
 
 ## 架构
 
@@ -306,7 +323,7 @@ export EXPORT_SPLIT=true
 | **Config** | 配置管理、环境变量、配置校验 | `internal/config/` |
 | **Filter** | 表过滤规则 | `internal/filter/` |
 | **Inspector** | 数据库元数据查询接口 | `internal/inspector/interface.go` |
-| **Database** | 各数据库 Inspector 实现 | `internal/database/dm/`, `internal/database/oracle/`, `internal/database/sqlserver/` |
+| **Database** | 各数据库 Inspector 实现 | `internal/database/dm/`, `internal/database/oracle/`, `internal/database/sqlserver/`, `internal/database/mysql/` |
 | **Model** | 数据模型定义 | `internal/model/` |
 | **Exporter** | 导出格式实现 | `internal/exporter/markdown/`, `internal/exporter/sql/` |
 | **Third-Party** | 仓库内置第三方驱动源码 | `third_party/dm-go-driver/` |

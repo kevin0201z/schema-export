@@ -14,8 +14,10 @@ import (
 	_ "github.com/schema-export/schema-export/internal/database/sqlserver"
 
 	// 导入导出器注册
+	_ "github.com/schema-export/schema-export/internal/exporter/json"
 	_ "github.com/schema-export/schema-export/internal/exporter/markdown"
 	_ "github.com/schema-export/schema-export/internal/exporter/sql"
+	_ "github.com/schema-export/schema-export/internal/exporter/yaml"
 )
 
 var (
@@ -71,7 +73,7 @@ func newExportCmd() *cobra.Command {
 
 	// 导出参数
 	exportCmd.Flags().StringVar(&cmd.Config.Export.OutputDir, "output", "./output", "Output directory")
-	exportCmd.Flags().StringSliceVar(&cmd.Config.Export.Formats, "formats", []string{"markdown"}, "Export formats (markdown, sql)")
+	exportCmd.Flags().StringSliceVar(&cmd.Config.Export.Formats, "formats", []string{"markdown"}, "Export formats (markdown, sql, json, yaml)")
 	exportCmd.Flags().BoolVar(&cmd.Config.Export.SplitFiles, "split", false, "Split output into separate files per table")
 	exportCmd.Flags().StringSliceVar(&cmd.Config.Export.Tables, "tables", nil, "Tables to export (comma-separated)")
 	exportCmd.Flags().StringSliceVar(&cmd.Config.Export.Exclude, "exclude", nil, "Tables to exclude (comma-separated)")

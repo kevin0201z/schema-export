@@ -36,6 +36,18 @@ type Inspector interface {
 
 	// GetViews 获取视图列表
 	GetViews(ctx context.Context) ([]model.View, error)
+
+	// GetProcedures 获取存储过程列表
+	GetProcedures(ctx context.Context) ([]model.Procedure, error)
+
+	// GetFunctions 获取函数列表
+	GetFunctions(ctx context.Context) ([]model.Function, error)
+
+	// GetTriggers 获取触发器列表
+	GetTriggers(ctx context.Context, tableName string) ([]model.Trigger, error)
+
+	// GetSequences 获取序列列表
+	GetSequences(ctx context.Context) ([]model.Sequence, error)
 }
 
 // InspectorFactory Inspector 工厂接口

@@ -180,6 +180,101 @@ const (
 		LEFT JOIN USER_TAB_COMMENTS c ON v.VIEW_NAME = c.TABLE_NAME AND c.TABLE_TYPE = 'VIEW'
 		ORDER BY v.VIEW_NAME
 	`
+
+	// 存储过程查询
+	queryProceduresAllSQL = `
+		SELECT p.OBJECT_NAME, c.COMMENTS
+		FROM ALL_PROCEDURES p
+		LEFT JOIN ALL_TAB_COMMENTS c ON p.OWNER = c.OWNER AND p.OBJECT_NAME = c.TABLE_NAME
+		WHERE p.OWNER = %s AND p.OBJECT_TYPE = 'PROCEDURE'
+		ORDER BY p.OBJECT_NAME
+	`
+	queryProceduresUserSQL = `
+		SELECT p.OBJECT_NAME, c.COMMENTS
+		FROM USER_PROCEDURES p
+		LEFT JOIN USER_TAB_COMMENTS c ON p.OBJECT_NAME = c.TABLE_NAME
+		WHERE p.OBJECT_TYPE = 'PROCEDURE'
+		ORDER BY p.OBJECT_NAME
+	`
+
+	// 函数查询
+	queryFunctionsAllSQL = `
+		SELECT p.OBJECT_NAME, c.COMMENTS
+		FROM ALL_PROCEDURES p
+		LEFT JOIN ALL_TAB_COMMENTS c ON p.OWNER = c.OWNER AND p.OBJECT_NAME = c.TABLE_NAME
+		WHERE p.OWNER = %s AND p.OBJECT_TYPE = 'FUNCTION'
+		ORDER BY p.OBJECT_NAME
+	`
+	queryFunctionsUserSQL = `
+		SELECT p.OBJECT_NAME, c.COMMENTS
+		FROM USER_PROCEDURES p
+		LEFT JOIN USER_TAB_COMMENTS c ON p.OBJECT_NAME = c.TABLE_NAME
+		WHERE p.OBJECT_TYPE = 'FUNCTION'
+		ORDER BY p.OBJECT_NAME
+	`
+
+	// 源代码查询
+	querySourceAllSQL = `
+		SELECT TEXT FROM ALL_SOURCE 
+		WHERE OWNER = %s AND NAME = %s AND TYPE = %s
+		ORDER BY LINE
+	`
+	querySourceUserSQL = `
+		SELECT TEXT FROM USER_SOURCE 
+		WHERE NAME = %s AND TYPE = %s
+		ORDER BY LINE
+	`
+
+	// 触发器查询
+	queryTriggersAllSQL = `
+		SELECT 
+			t.TRIGGER_NAME,
+			t.TABLE_NAME,
+			t.TRIGGERING_EVENT,
+			t.STATUS,
+			t.TRIGGER_BODY
+		FROM ALL_TRIGGERS t
+		WHERE t.TABLE_NAME = %s AND t.OWNER = %s
+		ORDER BY t.TRIGGER_NAME
+	`
+	queryTriggersUserSQL = `
+		SELECT 
+			t.TRIGGER_NAME,
+			t.TABLE_NAME,
+			t.TRIGGERING_EVENT,
+			t.STATUS,
+			t.TRIGGER_BODY
+		FROM USER_TRIGGERS t
+		WHERE t.TABLE_NAME = %s
+		ORDER BY t.TRIGGER_NAME
+	`
+
+	// 序列查询
+	querySequencesAllSQL = `
+		SELECT 
+			SEQUENCE_NAME,
+			MIN_VALUE,
+			MAX_VALUE,
+			INCREMENT_BY,
+			CYCLE_FLAG,
+			CACHE_SIZE,
+			LAST_NUMBER
+		FROM ALL_SEQUENCES
+		WHERE SEQUENCE_OWNER = %s
+		ORDER BY SEQUENCE_NAME
+	`
+	querySequencesUserSQL = `
+		SELECT 
+			SEQUENCE_NAME,
+			MIN_VALUE,
+			MAX_VALUE,
+			INCREMENT_BY,
+			CYCLE_FLAG,
+			CACHE_SIZE,
+			LAST_NUMBER
+		FROM USER_SEQUENCES
+		ORDER BY SEQUENCE_NAME
+	`
 )
 
 // OracleCompatibleInspector Oracle 兼容数据库 Inspector 基础实现
@@ -275,6 +370,30 @@ func (o *OracleCompatibleInspector) GetCheckConstraints(ctx context.Context, tab
 func (o *OracleCompatibleInspector) GetViews(ctx context.Context) ([]model.View, error) {
 	config := o.GetConfig()
 	return o.queryViews(ctx, config.Schema)
+}
+
+// GetProcedures 获取存储过程列表（实现 inspector.Inspector 接口）
+func (o *OracleCompatibleInspector) GetProcedures(ctx context.Context) ([]model.Procedure, error) {
+	config := o.GetConfig()
+	return o.queryProcedures(ctx, config.Schema)
+}
+
+// GetFunctions 获取函数列表（实现 inspector.Inspector 接口）
+func (o *OracleCompatibleInspector) GetFunctions(ctx context.Context) ([]model.Function, error) {
+	config := o.GetConfig()
+	return o.queryFunctions(ctx, config.Schema)
+}
+
+// GetTriggers 获取触发器列表（实现 inspector.Inspector 接口）
+func (o *OracleCompatibleInspector) GetTriggers(ctx context.Context, tableName string) ([]model.Trigger, error) {
+	config := o.GetConfig()
+	return o.queryTriggers(ctx, tableName, config.Schema)
+}
+
+// GetSequences 获取序列列表（实现 inspector.Inspector 接口）
+func (o *OracleCompatibleInspector) GetSequences(ctx context.Context) ([]model.Sequence, error) {
+	config := o.GetConfig()
+	return o.querySequences(ctx, config.Schema)
 }
 
 // QueryInput 通用查询输入参数
@@ -612,4 +731,217 @@ func (o *OracleCompatibleInspector) queryViews(ctx context.Context, schema strin
 	}
 
 	return views, rows.Err()
+}
+
+// queryProcedures 查询存储过程列表
+func (o *OracleCompatibleInspector) queryProcedures(ctx context.Context, schema string) ([]model.Procedure, error) {
+	var query string
+	var args []interface{}
+
+	if schema != "" {
+		query = fmt.Sprintf(queryProceduresAllSQL, o.placeholderStr(1))
+		args = append(args, schema)
+	} else {
+		query = queryProceduresUserSQL
+	}
+
+	rows, err := o.GetDB().QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var procedures []model.Procedure
+	for rows.Next() {
+		var proc model.Procedure
+		var comment sql.NullString
+		if err := rows.Scan(&proc.Name, &comment); err != nil {
+			return nil, err
+		}
+		if comment.Valid {
+			proc.Comment = comment.String
+		}
+		procedures = append(procedures, proc)
+	}
+
+	for i := range procedures {
+		def, err := o.querySource(ctx, procedures[i].Name, "PROCEDURE", schema)
+		if err == nil {
+			procedures[i].Definition = def
+		}
+	}
+
+	return procedures, rows.Err()
+}
+
+// queryFunctions 查询函数列表
+func (o *OracleCompatibleInspector) queryFunctions(ctx context.Context, schema string) ([]model.Function, error) {
+	var query string
+	var args []interface{}
+
+	if schema != "" {
+		query = fmt.Sprintf(queryFunctionsAllSQL, o.placeholderStr(1))
+		args = append(args, schema)
+	} else {
+		query = queryFunctionsUserSQL
+	}
+
+	rows, err := o.GetDB().QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var functions []model.Function
+	for rows.Next() {
+		var fn model.Function
+		var comment sql.NullString
+		if err := rows.Scan(&fn.Name, &comment); err != nil {
+			return nil, err
+		}
+		if comment.Valid {
+			fn.Comment = comment.String
+		}
+		functions = append(functions, fn)
+	}
+
+	for i := range functions {
+		def, err := o.querySource(ctx, functions[i].Name, "FUNCTION", schema)
+		if err == nil {
+			functions[i].Definition = def
+		}
+	}
+
+	return functions, rows.Err()
+}
+
+// querySource 查询源代码
+func (o *OracleCompatibleInspector) querySource(ctx context.Context, name, objType, schema string) (string, error) {
+	var query string
+	var args []interface{}
+
+	if schema != "" {
+		query = fmt.Sprintf(querySourceAllSQL, o.placeholderStr(1), o.placeholderStr(2), o.placeholderStr(3))
+		args = append(args, schema, name, objType)
+	} else {
+		query = fmt.Sprintf(querySourceUserSQL, o.placeholderStr(1), o.placeholderStr(2))
+		args = append(args, name, objType)
+	}
+
+	rows, err := o.GetDB().QueryContext(ctx, query, args...)
+	if err != nil {
+		return "", err
+	}
+	defer rows.Close()
+
+	var source string
+	for rows.Next() {
+		var text sql.NullString
+		if err := rows.Scan(&text); err != nil {
+			return "", err
+		}
+		if text.Valid {
+			source += text.String
+		}
+	}
+
+	return source, rows.Err()
+}
+
+// queryTriggers 查询触发器列表
+func (o *OracleCompatibleInspector) queryTriggers(ctx context.Context, tableName, schema string) ([]model.Trigger, error) {
+	var query string
+	var args []interface{}
+
+	if schema != "" {
+		query = fmt.Sprintf(queryTriggersAllSQL, o.placeholderStr(1), o.placeholderStr(2))
+		args = append(args, tableName, schema)
+	} else {
+		query = fmt.Sprintf(queryTriggersUserSQL, o.placeholderStr(1))
+		args = append(args, tableName)
+	}
+
+	rows, err := o.GetDB().QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var triggers []model.Trigger
+	for rows.Next() {
+		var name, tblName, event, status string
+		var body sql.NullString
+		if err := rows.Scan(&name, &tblName, &event, &status, &body); err != nil {
+			return nil, err
+		}
+
+		tr := model.Trigger{
+			Name:      name,
+			TableName: tblName,
+			Event:     event,
+			Status:    status,
+		}
+		if body.Valid {
+			tr.Definition = body.String
+		}
+		triggers = append(triggers, tr)
+	}
+
+	return triggers, rows.Err()
+}
+
+// querySequences 查询序列列表
+func (o *OracleCompatibleInspector) querySequences(ctx context.Context, schema string) ([]model.Sequence, error) {
+	var query string
+	var args []interface{}
+
+	if schema != "" {
+		query = fmt.Sprintf(querySequencesAllSQL, o.placeholderStr(1))
+		args = append(args, schema)
+	} else {
+		query = querySequencesUserSQL
+	}
+
+	rows, err := o.GetDB().QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var sequences []model.Sequence
+	for rows.Next() {
+		var seq model.Sequence
+		var minVal, maxVal, incrBy, cacheSize, lastNum sql.NullInt64
+		var cycleFlag string
+		if err := rows.Scan(
+			&seq.Name,
+			&minVal,
+			&maxVal,
+			&incrBy,
+			&cycleFlag,
+			&cacheSize,
+			&lastNum,
+		); err != nil {
+			return nil, err
+		}
+		if minVal.Valid {
+			seq.MinValue = minVal.Int64
+		}
+		if maxVal.Valid {
+			seq.MaxValue = maxVal.Int64
+		}
+		if incrBy.Valid {
+			seq.IncrementBy = incrBy.Int64
+		}
+		if cacheSize.Valid {
+			seq.CacheSize = cacheSize.Int64
+		}
+		if lastNum.Valid {
+			seq.LastValue = lastNum.Int64
+		}
+		seq.Cycle = (cycleFlag == "Y" || cycleFlag == "YES")
+		sequences = append(sequences, seq)
+	}
+
+	return sequences, rows.Err()
 }

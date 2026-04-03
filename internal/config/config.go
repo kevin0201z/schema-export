@@ -31,13 +31,17 @@ type DatabaseConfig struct {
 
 // ExportConfig 导出配置
 type ExportConfig struct {
-	OutputDir    string   `yaml:"output_dir" json:"output_dir"`
-	Formats      []string `yaml:"formats" json:"formats"`
-	SplitFiles   bool     `yaml:"split_files" json:"split_files"`
-	Tables       []string `yaml:"tables" json:"tables"`
-	Exclude      []string `yaml:"exclude" json:"exclude"`
-	Patterns     []string `yaml:"patterns" json:"patterns"`
-	IncludeViews bool     `yaml:"include_views" json:"include_views"`
+	OutputDir         string   `yaml:"output_dir" json:"output_dir"`
+	Formats           []string `yaml:"formats" json:"formats"`
+	SplitFiles        bool     `yaml:"split_files" json:"split_files"`
+	Tables            []string `yaml:"tables" json:"tables"`
+	Exclude           []string `yaml:"exclude" json:"exclude"`
+	Patterns          []string `yaml:"patterns" json:"patterns"`
+	IncludeViews      bool     `yaml:"include_views" json:"include_views"`
+	IncludeProcedures bool     `yaml:"include_procedures" json:"include_procedures"`
+	IncludeFunctions  bool     `yaml:"include_functions" json:"include_functions"`
+	IncludeTriggers   bool     `yaml:"include_triggers" json:"include_triggers"`
+	IncludeSequences  bool     `yaml:"include_sequences" json:"include_sequences"`
 }
 
 // ToConnectionConfig 转换为 Inspector 连接配置
@@ -94,6 +98,18 @@ func (c *Config) LoadFromEnv() {
 	}
 	if v := os.Getenv("EXPORT_INCLUDE_VIEWS"); v != "" {
 		c.Export.IncludeViews = (v == "true" || v == "1")
+	}
+	if v := os.Getenv("EXPORT_INCLUDE_PROCEDURES"); v != "" {
+		c.Export.IncludeProcedures = (v == "true" || v == "1")
+	}
+	if v := os.Getenv("EXPORT_INCLUDE_FUNCTIONS"); v != "" {
+		c.Export.IncludeFunctions = (v == "true" || v == "1")
+	}
+	if v := os.Getenv("EXPORT_INCLUDE_TRIGGERS"); v != "" {
+		c.Export.IncludeTriggers = (v == "true" || v == "1")
+	}
+	if v := os.Getenv("EXPORT_INCLUDE_SEQUENCES"); v != "" {
+		c.Export.IncludeSequences = (v == "true" || v == "1")
 	}
 }
 

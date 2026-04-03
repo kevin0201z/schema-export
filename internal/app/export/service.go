@@ -96,7 +96,50 @@ func (s *Service) Run() error {
 		}
 	}
 
-	if err := s.ExportAllFormats(fullTables, views); err != nil {
+	var procedures []model.Procedure
+	if s.Config.Export.IncludeProcedures {
+		procedures, err = ins.GetProcedures(ctx)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to get procedures: %v\n", err)
+		} else {
+			fmt.Printf("Found %d procedures\n", len(procedures))
+		}
+	}
+
+	var functions []model.Function
+	if s.Config.Export.IncludeFunctions {
+		functions, err = ins.GetFunctions(ctx)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to get functions: %v\n", err)
+		} else {
+			fmt.Printf("Found %d functions\n", len(functions))
+		}
+	}
+
+	var triggers []model.Trigger
+	if s.Config.Export.IncludeTriggers {
+		for _, table := range fullTables {
+			tableTriggers, err := ins.GetTriggers(ctx, table.Name)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: failed to get triggers for table %s: %v\n", table.Name, err)
+				continue
+			}
+			triggers = append(triggers, tableTriggers...)
+		}
+		fmt.Printf("Found %d triggers\n", len(triggers))
+	}
+
+	var sequences []model.Sequence
+	if s.Config.Export.IncludeSequences {
+		sequences, err = ins.GetSequences(ctx)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to get sequences: %v\n", err)
+		} else {
+			fmt.Printf("Found %d sequences\n", len(sequences))
+		}
+	}
+
+	if err := s.ExportAllFormats(fullTables, views, procedures, functions, triggers, sequences); err != nil {
 		return err
 	}
 
@@ -128,12 +171,12 @@ func (s *Service) loadTables(ctx context.Context, ins inspector.Inspector, table
 }
 
 // ExportAllFormats 导出所有格式。
-func (s *Service) ExportAllFormats(tables []model.Table, views []model.View) error {
+func (s *Service) ExportAllFormats(tables []model.Table, views []model.View, procedures []model.Procedure, functions []model.Function, triggers []model.Trigger, sequences []model.Sequence) error {
 	var failed []string
 	successCount := 0
 
 	for _, format := range s.Config.Export.Formats {
-		if err := s.exportFormat(tables, views, format); err != nil {
+		if err := s.exportFormat(tables, views, procedures, functions, triggers, sequences, format); err != nil {
 			fmt.Fprintf(os.Stderr, "Error exporting to %s: %v\n", format, err)
 			failed = append(failed, fmt.Sprintf("%s (%v)", format, err))
 			continue
@@ -152,7 +195,7 @@ func (s *Service) ExportAllFormats(tables []model.Table, views []model.View) err
 	return fmt.Errorf("partial export failure: %s", strings.Join(failed, "; "))
 }
 
-func (s *Service) exportFormat(tables []model.Table, views []model.View, format string) error {
+func (s *Service) exportFormat(tables []model.Table, views []model.View, procedures []model.Procedure, functions []model.Function, triggers []model.Trigger, sequences []model.Sequence, format string) error {
 	factory, ok := exporter.GetFactory(format)
 	if !ok {
 		return fmt.Errorf("unsupported export format: %s", format)
@@ -165,14 +208,18 @@ func (s *Service) exportFormat(tables []model.Table, views []model.View, format 
 
 	outputDir, fileName := ParseOutputPath(s.Config.Export.OutputDir, format)
 	options := exporter.ExportOptions{
-		OutputDir:    outputDir,
-		FileName:     fileName,
-		SplitFiles:   s.Config.Export.SplitFiles,
-		DbType:       s.Config.Database.Type,
-		IncludeViews: s.Config.Export.IncludeViews,
+		OutputDir:         outputDir,
+		FileName:          fileName,
+		SplitFiles:        s.Config.Export.SplitFiles,
+		DbType:            s.Config.Database.Type,
+		IncludeViews:      s.Config.Export.IncludeViews,
+		IncludeProcedures: s.Config.Export.IncludeProcedures,
+		IncludeFunctions:  s.Config.Export.IncludeFunctions,
+		IncludeTriggers:   s.Config.Export.IncludeTriggers,
+		IncludeSequences:  s.Config.Export.IncludeSequences,
 	}
 
-	if err := exp.Export(tables, views, options); err != nil {
+	if err := exp.Export(tables, views, procedures, functions, triggers, sequences, options); err != nil {
 		return fmt.Errorf("export failed: %w", err)
 	}
 

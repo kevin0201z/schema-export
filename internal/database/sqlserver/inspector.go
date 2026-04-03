@@ -457,6 +457,184 @@ func (i *Inspector) GetViews(ctx context.Context) ([]model.View, error) {
 	return views, rows.Err()
 }
 
+// GetProcedures 获取存储过程列表
+func (i *Inspector) GetProcedures(ctx context.Context) ([]model.Procedure, error) {
+	query := `
+		SELECT 
+			p.name AS procedure_name,
+			CAST(ep.value AS NVARCHAR(MAX)) AS procedure_comment,
+			CAST(m.definition AS NVARCHAR(MAX)) AS procedure_definition
+		FROM sys.procedures p
+		LEFT JOIN sys.sql_modules m ON p.object_id = m.object_id
+		LEFT JOIN sys.extended_properties ep 
+			ON p.object_id = ep.major_id 
+			AND ep.minor_id = 0 
+			AND ep.name = 'MS_Description'
+		WHERE p.is_ms_shipped = 0
+		ORDER BY p.name
+	`
+
+	rows, err := i.GetDB().QueryContext(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query procedures: %w", err)
+	}
+	defer rows.Close()
+
+	var procedures []model.Procedure
+	for rows.Next() {
+		var proc model.Procedure
+		var comment, definition sql.NullString
+		if err := rows.Scan(&proc.Name, &comment, &definition); err != nil {
+			return nil, err
+		}
+		if comment.Valid {
+			proc.Comment = comment.String
+		}
+		if definition.Valid {
+			proc.Definition = definition.String
+		}
+		procedures = append(procedures, proc)
+	}
+
+	return procedures, rows.Err()
+}
+
+// GetFunctions 获取函数列表
+func (i *Inspector) GetFunctions(ctx context.Context) ([]model.Function, error) {
+	query := `
+		SELECT 
+			o.name AS function_name,
+			CAST(ep.value AS NVARCHAR(MAX)) AS function_comment,
+			CAST(m.definition AS NVARCHAR(MAX)) AS function_definition
+		FROM sys.objects o
+		LEFT JOIN sys.sql_modules m ON o.object_id = m.object_id
+		LEFT JOIN sys.extended_properties ep 
+			ON o.object_id = ep.major_id 
+			AND ep.minor_id = 0 
+			AND ep.name = 'MS_Description'
+		WHERE o.type IN ('FN', 'IF', 'TF') AND o.is_ms_shipped = 0
+		ORDER BY o.name
+	`
+
+	rows, err := i.GetDB().QueryContext(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query functions: %w", err)
+	}
+	defer rows.Close()
+
+	var functions []model.Function
+	for rows.Next() {
+		var fn model.Function
+		var comment, definition sql.NullString
+		if err := rows.Scan(&fn.Name, &comment, &definition); err != nil {
+			return nil, err
+		}
+		if comment.Valid {
+			fn.Comment = comment.String
+		}
+		if definition.Valid {
+			fn.Definition = definition.String
+		}
+		functions = append(functions, fn)
+	}
+
+	return functions, rows.Err()
+}
+
+// GetTriggers 获取触发器列表
+func (i *Inspector) GetTriggers(ctx context.Context, tableName string) ([]model.Trigger, error) {
+	query := `
+		SELECT 
+			tr.name AS trigger_name,
+			t.name AS table_name,
+			tr.is_disabled,
+			CAST(m.definition AS NVARCHAR(MAX)) AS trigger_definition
+		FROM sys.triggers tr
+		INNER JOIN sys.tables t ON tr.parent_id = t.object_id
+		LEFT JOIN sys.sql_modules m ON tr.object_id = m.object_id
+		WHERE t.name = @p1
+		ORDER BY tr.name
+	`
+
+	rows, err := i.GetDB().QueryContext(ctx, query, tableName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query triggers: %w", err)
+	}
+	defer rows.Close()
+
+	var triggers []model.Trigger
+	for rows.Next() {
+		var tr model.Trigger
+		var isDisabled bool
+		var definition sql.NullString
+		if err := rows.Scan(&tr.Name, &tr.TableName, &isDisabled, &definition); err != nil {
+			return nil, err
+		}
+		tr.Status = "ENABLED"
+		if isDisabled {
+			tr.Status = "DISABLED"
+		}
+		if definition.Valid {
+			tr.Definition = definition.String
+		}
+		triggers = append(triggers, tr)
+	}
+
+	return triggers, rows.Err()
+}
+
+// GetSequences 获取序列列表
+func (i *Inspector) GetSequences(ctx context.Context) ([]model.Sequence, error) {
+	query := `
+		SELECT 
+			s.name AS sequence_name,
+			s.minimum_value,
+			s.maximum_value,
+			s.increment,
+			s.is_cycling,
+			s.cache_size,
+			s.current_value
+		FROM sys.sequences s
+		WHERE s.is_ms_shipped = 0
+		ORDER BY s.name
+	`
+
+	rows, err := i.GetDB().QueryContext(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query sequences: %w", err)
+	}
+	defer rows.Close()
+
+	var sequences []model.Sequence
+	for rows.Next() {
+		var seq model.Sequence
+		var minVal, maxVal, incr, cacheSize, currVal sql.NullInt64
+		var isCycling bool
+		if err := rows.Scan(&seq.Name, &minVal, &maxVal, &incr, &isCycling, &cacheSize, &currVal); err != nil {
+			return nil, err
+		}
+		if minVal.Valid {
+			seq.MinValue = minVal.Int64
+		}
+		if maxVal.Valid {
+			seq.MaxValue = maxVal.Int64
+		}
+		if incr.Valid {
+			seq.IncrementBy = incr.Int64
+		}
+		if cacheSize.Valid {
+			seq.CacheSize = cacheSize.Int64
+		}
+		if currVal.Valid {
+			seq.LastValue = currVal.Int64
+		}
+		seq.Cycle = isCycling
+		sequences = append(sequences, seq)
+	}
+
+	return sequences, rows.Err()
+}
+
 // getTableComment 获取表注释
 func (i *Inspector) getTableComment(ctx context.Context, tableName string) (string, error) {
 	query := `

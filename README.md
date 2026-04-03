@@ -9,7 +9,7 @@
 - **多数据库支持**：达梦（DM）、Oracle、SQL Server、MySQL
 - **多种导出格式**：Markdown、SQL DDL、JSON、YAML
 - **灵活的导出模式**：单文件或按表分文件导出
-- **视图支持**：导出数据库视图定义
+- **数据库对象支持**：表、视图、存储过程、函数、触发器、序列
 - **表过滤功能**：包含/排除表、正则表达式匹配
 - **CLI 界面**：易于使用的命令行界面
 - **环境变量**：支持通过环境变量配置
@@ -148,6 +148,10 @@ export EXPORT_INCLUDE_VIEWS=true
 | `--exclude`  | <br />   | 要排除的表（逗号分隔）                     |
 | `--patterns` | <br />   | 表名正则匹配模式                        |
 | `-V, --include-views` | false | 包含视图导出                      |
+| `-P, --include-procedures` | false | 包含存储过程导出                |
+| `-F, --include-functions` | false | 包含函数导出                    |
+| `-T, --include-triggers` | false | 包含触发器导出                  |
+| `-S, --include-sequences` | false | 包含序列导出                  |
 
 ## 环境变量
 
@@ -165,6 +169,10 @@ export EXPORT_INCLUDE_VIEWS=true
 | `EXPORT_FORMATS`      | 导出格式（逗号分隔）          |
 | `EXPORT_SPLIT`        | 分文件导出（true/false）   |
 | `EXPORT_INCLUDE_VIEWS` | 包含视图导出（true/false） |
+| `EXPORT_INCLUDE_PROCEDURES` | 包含存储过程导出（true/false） |
+| `EXPORT_INCLUDE_FUNCTIONS` | 包含函数导出（true/false） |
+| `EXPORT_INCLUDE_TRIGGERS` | 包含触发器导出（true/false） |
+| `EXPORT_INCLUDE_SEQUENCES` | 包含序列导出（true/false） |
 
 ## 输出说明
 

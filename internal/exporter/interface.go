@@ -6,8 +6,8 @@ import (
 
 // Exporter 导出器接口
 type Exporter interface {
-	// Export 导出表结构和视图
-	Export(tables []model.Table, views []model.View, options ExportOptions) error
+	// Export 导出表结构、视图、存储过程、函数、触发器和序列
+	Export(tables []model.Table, views []model.View, procedures []model.Procedure, functions []model.Function, triggers []model.Trigger, sequences []model.Sequence, options ExportOptions) error
 
 	// GetName 获取导出器名称
 	GetName() string
@@ -18,13 +18,17 @@ type Exporter interface {
 
 // ExportOptions 导出选项
 type ExportOptions struct {
-	OutputDir    string   // 输出目录
-	FileName     string   // 文件名（单文件模式）
-	SplitFiles   bool     // 是否分文件导出
-	Tables       []string // 指定导出的表（空表示全部）
-	Exclude      []string // 排除的表
-	DbType       string   // 数据库类型（用于选择方言）
-	IncludeViews bool     // 是否包含视图
+	OutputDir         string   // 输出目录
+	FileName          string   // 文件名（单文件模式）
+	SplitFiles        bool     // 是否分文件导出
+	Tables            []string // 指定导出的表（空表示全部）
+	Exclude           []string // 排除的表
+	DbType            string   // 数据库类型（用于选择方言）
+	IncludeViews      bool     // 是否包含视图
+	IncludeProcedures bool     // 是否包含存储过程
+	IncludeFunctions  bool     // 是否包含函数
+	IncludeTriggers   bool     // 是否包含触发器
+	IncludeSequences  bool     // 是否包含序列
 }
 
 // ExporterFactory 导出器工厂接口

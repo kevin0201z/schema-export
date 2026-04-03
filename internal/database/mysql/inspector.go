@@ -398,6 +398,129 @@ func (i *Inspector) GetViews(ctx context.Context) ([]model.View, error) {
 	return views, rows.Err()
 }
 
+// GetProcedures 获取存储过程列表
+func (i *Inspector) GetProcedures(ctx context.Context) ([]model.Procedure, error) {
+	query := `
+		SELECT 
+			ROUTINE_NAME,
+			ROUTINE_COMMENT,
+			ROUTINE_DEFINITION
+		FROM information_schema.ROUTINES
+		WHERE ROUTINE_SCHEMA = DATABASE() AND ROUTINE_TYPE = 'PROCEDURE'
+		ORDER BY ROUTINE_NAME
+	`
+
+	rows, err := i.GetDB().QueryContext(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query procedures: %w", err)
+	}
+	defer rows.Close()
+
+	var procedures []model.Procedure
+	for rows.Next() {
+		var proc model.Procedure
+		var comment, definition sql.NullString
+		if err := rows.Scan(&proc.Name, &comment, &definition); err != nil {
+			return nil, err
+		}
+		if comment.Valid {
+			proc.Comment = comment.String
+		}
+		if definition.Valid {
+			proc.Definition = definition.String
+		}
+		procedures = append(procedures, proc)
+	}
+
+	return procedures, rows.Err()
+}
+
+// GetFunctions 获取函数列表
+func (i *Inspector) GetFunctions(ctx context.Context) ([]model.Function, error) {
+	query := `
+		SELECT 
+			ROUTINE_NAME,
+			ROUTINE_COMMENT,
+			ROUTINE_DEFINITION,
+			DTD_IDENTIFIER
+		FROM information_schema.ROUTINES
+		WHERE ROUTINE_SCHEMA = DATABASE() AND ROUTINE_TYPE = 'FUNCTION'
+		ORDER BY ROUTINE_NAME
+	`
+
+	rows, err := i.GetDB().QueryContext(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query functions: %w", err)
+	}
+	defer rows.Close()
+
+	var functions []model.Function
+	for rows.Next() {
+		var fn model.Function
+		var comment, definition, returnType sql.NullString
+		if err := rows.Scan(&fn.Name, &comment, &definition, &returnType); err != nil {
+			return nil, err
+		}
+		if comment.Valid {
+			fn.Comment = comment.String
+		}
+		if definition.Valid {
+			fn.Definition = definition.String
+		}
+		if returnType.Valid {
+			fn.ReturnType = returnType.String
+		}
+		functions = append(functions, fn)
+	}
+
+	return functions, rows.Err()
+}
+
+// GetTriggers 获取触发器列表
+func (i *Inspector) GetTriggers(ctx context.Context, tableName string) ([]model.Trigger, error) {
+	query := `
+		SELECT 
+			TRIGGER_NAME,
+			EVENT_MANIPULATION,
+			EVENT_OBJECT_TABLE,
+			ACTION_TIMING,
+			ACTION_STATEMENT
+		FROM information_schema.TRIGGERS
+		WHERE TRIGGER_SCHEMA = DATABASE() AND EVENT_OBJECT_TABLE = ?
+		ORDER BY TRIGGER_NAME
+	`
+
+	rows, err := i.GetDB().QueryContext(ctx, query, tableName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query triggers: %w", err)
+	}
+	defer rows.Close()
+
+	var triggers []model.Trigger
+	for rows.Next() {
+		var tr model.Trigger
+		if err := rows.Scan(
+			&tr.Name,
+			&tr.Event,
+			&tr.TableName,
+			&tr.Timing,
+			&tr.Definition,
+		); err != nil {
+			return nil, err
+		}
+		tr.Status = "ENABLED"
+		triggers = append(triggers, tr)
+	}
+
+	return triggers, rows.Err()
+}
+
+// GetSequences 获取序列列表
+// MySQL 不支持序列，返回空列表
+func (i *Inspector) GetSequences(ctx context.Context) ([]model.Sequence, error) {
+	return []model.Sequence{}, nil
+}
+
 // getTableComment 获取表注释
 func (i *Inspector) getTableComment(ctx context.Context, tableName string) (string, error) {
 	query := `SELECT TABLE_COMMENT FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?`

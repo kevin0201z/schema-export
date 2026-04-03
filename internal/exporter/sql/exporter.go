@@ -10,39 +10,34 @@ import (
 	"github.com/schema-export/schema-export/internal/model"
 )
 
-// Exporter SQL DDL 导出器
 type Exporter struct {
 	dialect Dialect
 }
 
-// NewExporter 创建 SQL 导出器
 func NewExporter() *Exporter {
 	return &Exporter{
 		dialect: &GenericDialect{},
 	}
 }
 
-// NewExporterWithDialect 创建带方言的 SQL 导出器
 func NewExporterWithDialect(dbType string) *Exporter {
 	return &Exporter{
 		dialect: GetDialect(dbType),
 	}
 }
 
-// Export 导出表结构和视图
-func (e *Exporter) Export(tables []model.Table, views []model.View, options exporter.ExportOptions) error {
+func (e *Exporter) Export(tables []model.Table, views []model.View, procedures []model.Procedure, functions []model.Function, triggers []model.Trigger, sequences []model.Sequence, options exporter.ExportOptions) error {
 	if options.DbType != "" {
 		e.dialect = GetDialect(options.DbType)
 	}
 
 	if options.SplitFiles {
-		return e.exportSplitFiles(tables, views, options)
+		return e.exportSplitFiles(tables, views, procedures, functions, triggers, sequences, options)
 	}
-	return e.exportSingleFile(tables, views, options)
+	return e.exportSingleFile(tables, views, procedures, functions, triggers, sequences, options)
 }
 
-// exportSingleFile 导出到单个文件
-func (e *Exporter) exportSingleFile(tables []model.Table, views []model.View, options exporter.ExportOptions) error {
+func (e *Exporter) exportSingleFile(tables []model.Table, views []model.View, procedures []model.Procedure, functions []model.Function, triggers []model.Trigger, sequences []model.Sequence, options exporter.ExportOptions) error {
 	outputPath := filepath.Join(options.OutputDir, options.FileName)
 	if outputPath == "" || outputPath == options.OutputDir {
 		outputPath = filepath.Join(options.OutputDir, "schema.sql")
@@ -73,33 +68,19 @@ func (e *Exporter) exportSingleFile(tables []model.Table, views []model.View, op
 	if options.IncludeViews {
 		fmt.Fprintf(file, "-- Total Views: %d\n", len(views))
 	}
-	fmt.Fprintln(file, "")
-
-	fmt.Fprintln(file, "-- --------------------------------------------------------")
-	fmt.Fprintln(file, "-- Table List")
-	fmt.Fprintln(file, "-- --------------------------------------------------------")
-	for i, table := range tables {
-		if table.Comment != "" {
-			fmt.Fprintf(file, "-- %d. %s - %s\n", i+1, table.Name, table.Comment)
-		} else {
-			fmt.Fprintf(file, "-- %d. %s\n", i+1, table.Name)
-		}
+	if options.IncludeProcedures {
+		fmt.Fprintf(file, "-- Total Procedures: %d\n", len(procedures))
+	}
+	if options.IncludeFunctions {
+		fmt.Fprintf(file, "-- Total Functions: %d\n", len(functions))
+	}
+	if options.IncludeTriggers {
+		fmt.Fprintf(file, "-- Total Triggers: %d\n", len(triggers))
+	}
+	if options.IncludeSequences {
+		fmt.Fprintf(file, "-- Total Sequences: %d\n", len(sequences))
 	}
 	fmt.Fprintln(file, "")
-
-	if options.IncludeViews && len(views) > 0 {
-		fmt.Fprintln(file, "-- --------------------------------------------------------")
-		fmt.Fprintln(file, "-- View List")
-		fmt.Fprintln(file, "-- --------------------------------------------------------")
-		for i, view := range views {
-			if view.Comment != "" {
-				fmt.Fprintf(file, "-- %d. %s - %s\n", i+1, view.Name, view.Comment)
-			} else {
-				fmt.Fprintf(file, "-- %d. %s\n", i+1, view.Name)
-			}
-		}
-		fmt.Fprintln(file, "")
-	}
 
 	for _, table := range tables {
 		if err := e.writeTableDDL(file, &table); err != nil {
@@ -122,11 +103,58 @@ func (e *Exporter) exportSingleFile(tables []model.Table, views []model.View, op
 		}
 	}
 
+	if options.IncludeProcedures && len(procedures) > 0 {
+		fmt.Fprintln(file, "-- ========================================================")
+		fmt.Fprintln(file, "-- Procedures")
+		fmt.Fprintln(file, "-- ========================================================")
+		fmt.Fprintln(file, "")
+
+		for _, proc := range procedures {
+			e.writeProcedureDDL(file, &proc)
+			fmt.Fprintln(file, "")
+		}
+	}
+
+	if options.IncludeFunctions && len(functions) > 0 {
+		fmt.Fprintln(file, "-- ========================================================")
+		fmt.Fprintln(file, "-- Functions")
+		fmt.Fprintln(file, "-- ========================================================")
+		fmt.Fprintln(file, "")
+
+		for _, fn := range functions {
+			e.writeFunctionDDL(file, &fn)
+			fmt.Fprintln(file, "")
+		}
+	}
+
+	if options.IncludeTriggers && len(triggers) > 0 {
+		fmt.Fprintln(file, "-- ========================================================")
+		fmt.Fprintln(file, "-- Triggers")
+		fmt.Fprintln(file, "-- ========================================================")
+		fmt.Fprintln(file, "")
+
+		for _, tr := range triggers {
+			e.writeTriggerDDL(file, &tr)
+			fmt.Fprintln(file, "")
+		}
+	}
+
+	if options.IncludeSequences && len(sequences) > 0 {
+		fmt.Fprintln(file, "-- ========================================================")
+		fmt.Fprintln(file, "-- Sequences")
+		fmt.Fprintln(file, "-- ========================================================")
+		fmt.Fprintln(file, "")
+
+		for _, seq := range sequences {
+			e.writeSequenceDDL(file, &seq)
+			fmt.Fprintln(file, "")
+		}
+	}
+
 	return nil
 }
 
-// exportSplitFiles 分文件导出
-func (e *Exporter) exportSplitFiles(tables []model.Table, views []model.View, options exporter.ExportOptions) error {
+func (e *Exporter) exportSplitFiles(tables []model.Table, views []model.View, procedures []model.Procedure, functions []model.Function, triggers []model.Trigger, sequences []model.Sequence, options exporter.ExportOptions) error {
 	sqlDir := filepath.Join(options.OutputDir, "sql")
 	if err := os.MkdirAll(sqlDir, 0755); err != nil {
 		return fmt.Errorf("failed to create sql directory: %w", err)
@@ -180,10 +208,80 @@ func (e *Exporter) exportSplitFiles(tables []model.Table, views []model.View, op
 		}
 	}
 
+	if options.IncludeProcedures {
+		for _, proc := range procedures {
+			outputPath := filepath.Join(sqlDir, proc.Name+"_procedure.sql")
+			file, err := os.Create(outputPath)
+			if err != nil {
+				return fmt.Errorf("failed to create file %s: %w", outputPath, err)
+			}
+			fmt.Fprintf(file, "-- ========================================================\n")
+			fmt.Fprintf(file, "-- Procedure: %s\n", proc.Name)
+			if proc.Comment != "" {
+				fmt.Fprintf(file, "-- Description: %s\n", proc.Comment)
+			}
+			fmt.Fprintf(file, "-- ========================================================\n")
+			fmt.Fprintln(file, "")
+			e.writeProcedureDDL(file, &proc)
+			file.Close()
+		}
+	}
+
+	if options.IncludeFunctions {
+		for _, fn := range functions {
+			outputPath := filepath.Join(sqlDir, fn.Name+"_function.sql")
+			file, err := os.Create(outputPath)
+			if err != nil {
+				return fmt.Errorf("failed to create file %s: %w", outputPath, err)
+			}
+			fmt.Fprintf(file, "-- ========================================================\n")
+			fmt.Fprintf(file, "-- Function: %s\n", fn.Name)
+			if fn.Comment != "" {
+				fmt.Fprintf(file, "-- Description: %s\n", fn.Comment)
+			}
+			fmt.Fprintf(file, "-- ========================================================\n")
+			fmt.Fprintln(file, "")
+			e.writeFunctionDDL(file, &fn)
+			file.Close()
+		}
+	}
+
+	if options.IncludeTriggers {
+		for _, tr := range triggers {
+			outputPath := filepath.Join(sqlDir, tr.Name+"_trigger.sql")
+			file, err := os.Create(outputPath)
+			if err != nil {
+				return fmt.Errorf("failed to create file %s: %w", outputPath, err)
+			}
+			fmt.Fprintf(file, "-- ========================================================\n")
+			fmt.Fprintf(file, "-- Trigger: %s\n", tr.Name)
+			fmt.Fprintf(file, "-- Table: %s\n", tr.TableName)
+			fmt.Fprintf(file, "-- ========================================================\n")
+			fmt.Fprintln(file, "")
+			e.writeTriggerDDL(file, &tr)
+			file.Close()
+		}
+	}
+
+	if options.IncludeSequences {
+		for _, seq := range sequences {
+			outputPath := filepath.Join(sqlDir, seq.Name+"_sequence.sql")
+			file, err := os.Create(outputPath)
+			if err != nil {
+				return fmt.Errorf("failed to create file %s: %w", outputPath, err)
+			}
+			fmt.Fprintf(file, "-- ========================================================\n")
+			fmt.Fprintf(file, "-- Sequence: %s\n", seq.Name)
+			fmt.Fprintf(file, "-- ========================================================\n")
+			fmt.Fprintln(file, "")
+			e.writeSequenceDDL(file, &seq)
+			file.Close()
+		}
+	}
+
 	return nil
 }
 
-// writeTableDDL 写入单个表的 DDL
 func (e *Exporter) writeTableDDL(file *os.File, table *model.Table) error {
 	fmt.Fprintf(file, "-- --------------------------------------------------------\n")
 	fmt.Fprintf(file, "-- Table: %s\n", table.Name)
@@ -284,7 +382,6 @@ func (e *Exporter) writeTableDDL(file *os.File, table *model.Table) error {
 	return nil
 }
 
-// writeViewDDL 写入单个视图的 DDL
 func (e *Exporter) writeViewDDL(file *os.File, view *model.View) error {
 	fmt.Fprintf(file, "-- --------------------------------------------------------\n")
 	fmt.Fprintf(file, "-- View: %s\n", view.Name)
@@ -308,7 +405,90 @@ func (e *Exporter) writeViewDDL(file *os.File, view *model.View) error {
 	return nil
 }
 
-// quoteColumns 引用多个字段名
+func (e *Exporter) writeProcedureDDL(file *os.File, proc *model.Procedure) {
+	fmt.Fprintf(file, "-- --------------------------------------------------------\n")
+	fmt.Fprintf(file, "-- Procedure: %s\n", proc.Name)
+	fmt.Fprintln(file, "-- --------------------------------------------------------")
+	if proc.Comment != "" {
+		fmt.Fprintf(file, "-- Description: %s\n", proc.Comment)
+	}
+	fmt.Fprintln(file, "")
+
+	if proc.Definition != "" {
+		fmt.Fprintln(file, proc.Definition)
+		if !strings.HasSuffix(strings.TrimSpace(proc.Definition), ";") {
+			fmt.Fprintln(file, ";")
+		}
+	}
+}
+
+func (e *Exporter) writeFunctionDDL(file *os.File, fn *model.Function) {
+	fmt.Fprintf(file, "-- --------------------------------------------------------\n")
+	fmt.Fprintf(file, "-- Function: %s\n", fn.Name)
+	fmt.Fprintln(file, "-- --------------------------------------------------------")
+	if fn.Comment != "" {
+		fmt.Fprintf(file, "-- Description: %s\n", fn.Comment)
+	}
+	if fn.ReturnType != "" {
+		fmt.Fprintf(file, "-- Return Type: %s\n", fn.ReturnType)
+	}
+	fmt.Fprintln(file, "")
+
+	if fn.Definition != "" {
+		fmt.Fprintln(file, fn.Definition)
+		if !strings.HasSuffix(strings.TrimSpace(fn.Definition), ";") {
+			fmt.Fprintln(file, ";")
+		}
+	}
+}
+
+func (e *Exporter) writeTriggerDDL(file *os.File, tr *model.Trigger) {
+	fmt.Fprintf(file, "-- --------------------------------------------------------\n")
+	fmt.Fprintf(file, "-- Trigger: %s\n", tr.Name)
+	fmt.Fprintln(file, "-- --------------------------------------------------------")
+	fmt.Fprintf(file, "-- Table: %s\n", tr.TableName)
+	if tr.Event != "" {
+		fmt.Fprintf(file, "-- Event: %s\n", tr.Event)
+	}
+	if tr.Timing != "" {
+		fmt.Fprintf(file, "-- Timing: %s\n", tr.Timing)
+	}
+	fmt.Fprintf(file, "-- Status: %s\n", tr.Status)
+	fmt.Fprintln(file, "")
+
+	if tr.Definition != "" {
+		fmt.Fprintln(file, tr.Definition)
+		if !strings.HasSuffix(strings.TrimSpace(tr.Definition), ";") {
+			fmt.Fprintln(file, ";")
+		}
+	}
+}
+
+func (e *Exporter) writeSequenceDDL(file *os.File, seq *model.Sequence) {
+	fmt.Fprintf(file, "-- --------------------------------------------------------\n")
+	fmt.Fprintf(file, "-- Sequence: %s\n", seq.Name)
+	fmt.Fprintln(file, "-- --------------------------------------------------------")
+	fmt.Fprintln(file, "")
+
+	fmt.Fprintf(file, "CREATE SEQUENCE %s\n", e.dialect.QuoteIdentifier(seq.Name))
+	if seq.MinValue != 0 {
+		fmt.Fprintf(file, "    MINVALUE %d\n", seq.MinValue)
+	}
+	if seq.MaxValue != 0 {
+		fmt.Fprintf(file, "    MAXVALUE %d\n", seq.MaxValue)
+	}
+	if seq.IncrementBy != 0 {
+		fmt.Fprintf(file, "    INCREMENT BY %d\n", seq.IncrementBy)
+	}
+	if seq.Cycle {
+		fmt.Fprintln(file, "    CYCLE")
+	}
+	if seq.CacheSize > 0 {
+		fmt.Fprintf(file, "    CACHE %d\n", seq.CacheSize)
+	}
+	fmt.Fprintln(file, ";")
+}
+
 func (e *Exporter) quoteColumns(columns []string) string {
 	quoted := make([]string, len(columns))
 	for i, col := range columns {
@@ -317,25 +497,20 @@ func (e *Exporter) quoteColumns(columns []string) string {
 	return strings.Join(quoted, ", ")
 }
 
-// GetName 获取导出器名称
 func (e *Exporter) GetName() string {
 	return "sql"
 }
 
-// GetExtension 获取文件扩展名
 func (e *Exporter) GetExtension() string {
 	return ".sql"
 }
 
-// Factory SQL Exporter 工厂
 type Factory struct{}
 
-// Create 创建 Exporter 实例
 func (f *Factory) Create() (exporter.Exporter, error) {
 	return NewExporter(), nil
 }
 
-// GetType 获取导出器类型
 func (f *Factory) GetType() string {
 	return "sql"
 }

@@ -12,6 +12,8 @@ import (
 	"github.com/schema-export/schema-export/internal/inspector"
 )
 
+var openDB = sql.Open
+
 // Inspector 达梦数据库 Inspector 实现
 // 使用 dm-go-driver 纯 Go 驱动，无需安装 ODBC
 type Inspector struct {
@@ -30,7 +32,7 @@ func (i *Inspector) Connect(ctx context.Context) error {
 	dsn := i.BuildDSN()
 
 	// 使用 dm-go-driver 连接
-	db, err := sql.Open("dm", dsn)
+	db, err := openDB("dm", dsn)
 	if err != nil {
 		return fmt.Errorf("failed to open dm connection: %w", err)
 	}

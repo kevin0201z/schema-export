@@ -11,6 +11,8 @@ import (
 	_ "github.com/sijms/go-ora/v2" // 纯 Go Oracle 驱动
 )
 
+var openDB = sql.Open
+
 // Inspector Oracle 数据库 Inspector 实现
 type Inspector struct {
 	*database.OracleCompatibleInspector
@@ -27,7 +29,7 @@ func NewInspector(config inspector.ConnectionConfig) *Inspector {
 func (i *Inspector) Connect(ctx context.Context) error {
 	dsn := i.BuildDSN()
 
-	db, err := sql.Open("oracle", dsn)
+	db, err := openDB("oracle", dsn)
 	if err != nil {
 		return fmt.Errorf("failed to open oracle connection: %w", err)
 	}

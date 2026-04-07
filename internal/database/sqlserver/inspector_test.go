@@ -2,6 +2,8 @@ package sqlserver
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"regexp"
 	"testing"
 
@@ -34,6 +36,64 @@ func TestSQLServerBuildDSN(t *testing.T) {
 		})
 		if got := ins.BuildDSN(); got != "sqlserver://sa:secret@127.0.0.1:1433?database=schema_export" {
 			t.Fatalf("unexpected DSN: %s", got)
+		}
+	})
+}
+
+func TestSQLServerConnect(t *testing.T) {
+	originalOpen := openDB
+	defer func() { openDB = originalOpen }()
+
+	t.Run("open failure", func(t *testing.T) {
+		openDB = func(string, string) (*sql.DB, error) {
+			return nil, errors.New("open failed")
+		}
+
+		ins := NewInspector(inspector.ConnectionConfig{})
+		if err := ins.Connect(context.Background()); err == nil || err.Error() != "failed to open sqlserver connection: open failed" {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("ping failure", func(t *testing.T) {
+		db, mock, err := sqlmock.New(sqlmock.MonitorPingsOption(true))
+		if err != nil {
+			t.Fatalf("failed to open sqlmock: %v", err)
+		}
+		defer db.Close()
+
+		openDB = func(string, string) (*sql.DB, error) {
+			return db, nil
+		}
+		mock.ExpectPing().WillReturnError(errors.New("ping failed"))
+
+		ins := NewInspector(inspector.ConnectionConfig{})
+		if err := ins.Connect(context.Background()); err == nil || err.Error() != "failed to ping sqlserver database: ping failed" {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("success", func(t *testing.T) {
+		db, mock, err := sqlmock.New(sqlmock.MonitorPingsOption(true))
+		if err != nil {
+			t.Fatalf("failed to open sqlmock: %v", err)
+		}
+		defer db.Close()
+
+		openDB = func(string, string) (*sql.DB, error) {
+			return db, nil
+		}
+		mock.ExpectPing()
+
+		ins := NewInspector(inspector.ConnectionConfig{Database: "schema_export"})
+		if err := ins.Connect(context.Background()); err != nil {
+			t.Fatalf("Connect failed: %v", err)
+		}
+		if ins.GetDB() == nil {
+			t.Fatalf("expected db to be set")
+		}
+		if err := mock.ExpectationsWereMet(); err != nil {
+			t.Fatalf("unmet expectations: %v", err)
 		}
 	})
 }
@@ -224,6 +284,413 @@ func TestSQLServerGetTableComment(t *testing.T) {
 
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Fatalf("unmet expectations: %v", err)
+	}
+}
+
+func TestSQLServerGetTables(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("failed to open sqlmock: %v", err)
+	}
+	defer db.Close()
+
+	ins := NewInspector(inspector.ConnectionConfig{})
+	ins.SetDB(db)
+
+	mock.ExpectQuery(regexp.QuoteMeta(`
+		SELECT 
+			t.name AS table_name,
+			CAST(ep.value AS NVARCHAR(MAX)) AS table_comment
+		FROM sys.tables t
+		LEFT JOIN sys.extended_properties ep 
+			ON t.object_id = ep.major_id 
+			AND ep.minor_id = 0 
+			AND ep.name = 'MS_Description'
+		WHERE t.is_ms_shipped = 0
+		ORDER BY t.name
+	`)).WillReturnRows(sqlmock.NewRows([]string{"table_name", "table_comment"}).
+		AddRow("users", "用户表").
+		AddRow("orders", nil))
+
+	tables, err := ins.GetTables(context.Background())
+	if err != nil {
+		t.Fatalf("GetTables failed: %v", err)
+	}
+	if len(tables) != 2 || tables[0].Name != "users" || tables[1].Name != "orders" {
+		t.Fatalf("unexpected tables: %#v", tables)
+	}
+	if tables[0].Type != "TABLE" || tables[0].Comment != "用户表" {
+		t.Fatalf("unexpected first table: %#v", tables[0])
+	}
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet expectations: %v", err)
+	}
+}
+
+func TestSQLServerGetTableAggregatesMetadata(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("failed to open sqlmock: %v", err)
+	}
+	defer db.Close()
+
+	ins := NewInspector(inspector.ConnectionConfig{})
+	ins.SetDB(db)
+
+	mock.ExpectQuery(regexp.QuoteMeta(`
+		SELECT CAST(ep.value AS NVARCHAR(MAX)) AS table_comment
+		FROM sys.tables t
+		LEFT JOIN sys.extended_properties ep 
+			ON t.object_id = ep.major_id 
+			AND ep.minor_id = 0 
+			AND ep.name = 'MS_Description'
+		WHERE t.name = @p1
+	`)).WithArgs("users").WillReturnRows(sqlmock.NewRows([]string{"table_comment"}).AddRow("用户表"))
+
+	mock.ExpectQuery(regexp.QuoteMeta(`
+		SELECT 
+			c.name AS column_name,
+			ty.name AS data_type,
+			c.max_length,
+			c.precision,
+			c.scale,
+			c.is_nullable,
+			CAST(dc.definition AS NVARCHAR(MAX)) AS default_value,
+			CAST(ep.value AS NVARCHAR(MAX)) AS column_comment,
+			CASE WHEN pk.column_id IS NOT NULL THEN 1 ELSE 0 END AS is_primary_key,
+			c.is_identity AS is_auto_increment
+		FROM sys.columns c
+		INNER JOIN sys.types ty ON c.user_type_id = ty.user_type_id
+		INNER JOIN sys.tables t ON c.object_id = t.object_id
+		LEFT JOIN sys.default_constraints dc ON c.default_object_id = dc.object_id
+		LEFT JOIN sys.extended_properties ep ON c.object_id = ep.major_id AND c.column_id = ep.minor_id AND ep.name = 'MS_Description'
+		LEFT JOIN (
+			SELECT ic.object_id, ic.column_id
+			FROM sys.indexes i
+			INNER JOIN sys.index_columns ic ON i.object_id = ic.object_id AND i.index_id = ic.index_id
+			WHERE i.is_primary_key = 1
+		) pk ON c.object_id = pk.object_id AND c.column_id = pk.column_id
+		WHERE t.name = @p1
+		ORDER BY c.column_id
+	`)).WithArgs("users").WillReturnRows(sqlmock.NewRows([]string{
+		"column_name", "data_type", "max_length", "precision", "scale", "is_nullable", "default_value", "column_comment", "is_primary_key", "is_auto_increment",
+	}).AddRow("id", "nvarchar", 40, 18, 0, false, "((0))", "主键ID", 1, true))
+
+	mock.ExpectQuery(regexp.QuoteMeta(`
+		SELECT 
+			i.name AS index_name,
+			i.type_desc AS index_type,
+			i.is_unique,
+			i.is_primary_key,
+			c.name AS column_name
+		FROM sys.indexes i
+		INNER JOIN sys.index_columns ic ON i.object_id = ic.object_id AND i.index_id = ic.index_id
+		INNER JOIN sys.columns c ON ic.object_id = c.object_id AND ic.column_id = c.column_id
+		INNER JOIN sys.tables t ON i.object_id = t.object_id
+		WHERE t.name = @p1 AND i.type > 0
+		ORDER BY i.name, ic.key_ordinal
+	`)).WithArgs("users").WillReturnRows(sqlmock.NewRows([]string{"index_name", "index_type", "is_unique", "is_primary_key", "column_name"}).
+		AddRow("PRIMARY", "CLUSTERED", true, true, "id").
+		AddRow("idx_users_name", "NONCLUSTERED", true, false, "name"))
+
+	mock.ExpectQuery(regexp.QuoteMeta(`
+		SELECT 
+			fk.name AS fk_name,
+			pc.name AS column_name,
+			rt.name AS ref_table,
+			rc.name AS ref_column,
+			fk.delete_referential_action_desc AS on_delete
+		FROM sys.foreign_keys fk
+		INNER JOIN sys.foreign_key_columns fkc ON fk.object_id = fkc.constraint_object_id
+		INNER JOIN sys.tables pt ON fk.parent_object_id = pt.object_id
+		INNER JOIN sys.columns pc ON fkc.parent_object_id = pc.object_id AND fkc.parent_column_id = pc.column_id
+		INNER JOIN sys.tables rt ON fk.referenced_object_id = rt.object_id
+		INNER JOIN sys.columns rc ON fkc.referenced_object_id = rc.object_id AND fkc.referenced_column_id = rc.column_id
+		WHERE pt.name = @p1
+	`)).WithArgs("users").WillReturnRows(sqlmock.NewRows([]string{"fk_name", "column_name", "ref_table", "ref_column", "on_delete"}).
+		AddRow("fk_users_role", "role_id", "roles", "id", "NO_ACTION"))
+
+	mock.ExpectQuery(regexp.QuoteMeta(`
+		SELECT 
+			cc.name AS constraint_name,
+			cc.definition AS definition,
+			c.name AS column_name
+		FROM sys.check_constraints cc
+		LEFT JOIN sys.columns c ON cc.parent_column_id = c.column_id AND cc.parent_object_id = c.object_id
+		INNER JOIN sys.tables t ON cc.parent_object_id = t.object_id
+		WHERE t.name = @p1
+		ORDER BY cc.name
+	`)).WithArgs("users").WillReturnRows(sqlmock.NewRows([]string{"constraint_name", "definition", "column_name"}).
+		AddRow("ck_users_age", "[age] > 0", "age"))
+
+	table, err := ins.GetTable(context.Background(), "users")
+	if err != nil {
+		t.Fatalf("GetTable failed: %v", err)
+	}
+	if table.Comment != "用户表" || len(table.Columns) != 1 || len(table.Indexes) != 2 || len(table.ForeignKeys) != 1 || len(table.CheckConstraints) != 1 {
+		t.Fatalf("unexpected table aggregate: %#v", table)
+	}
+	if !table.Columns[0].IsPrimaryKey || !table.Columns[0].IsAutoIncrement {
+		t.Fatalf("unexpected column flags: %#v", table.Columns[0])
+	}
+	if table.Indexes[0].Name != "PRIMARY" || !table.Indexes[0].IsPrimary {
+		t.Fatalf("unexpected indexes: %#v", table.Indexes)
+	}
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet expectations: %v", err)
+	}
+}
+
+func TestSQLServerGetTableFailureBranches(t *testing.T) {
+	tests := []struct {
+		name string
+		set  func(sqlmock.Sqlmock, *Inspector)
+	}{
+		{
+			name: "columns failure",
+			set: func(mock sqlmock.Sqlmock, ins *Inspector) {
+				mock.ExpectQuery(regexp.QuoteMeta(`
+		SELECT CAST(ep.value AS NVARCHAR(MAX)) AS table_comment
+		FROM sys.tables t
+		LEFT JOIN sys.extended_properties ep 
+			ON t.object_id = ep.major_id 
+			AND ep.minor_id = 0 
+			AND ep.name = 'MS_Description'
+		WHERE t.name = @p1
+	`)).WithArgs("users").WillReturnRows(sqlmock.NewRows([]string{"table_comment"}).AddRow(nil))
+				mock.ExpectQuery(regexp.QuoteMeta("SELECT \n\t\t\tc.name AS column_name")).WithArgs("users").WillReturnError(errors.New("columns boom"))
+			},
+		},
+		{
+			name: "indexes failure",
+			set: func(mock sqlmock.Sqlmock, ins *Inspector) {
+				mock.ExpectQuery(regexp.QuoteMeta(`SELECT CAST(ep.value AS NVARCHAR(MAX)) AS table_comment
+		FROM sys.tables t
+		LEFT JOIN sys.extended_properties ep 
+			ON t.object_id = ep.major_id 
+			AND ep.minor_id = 0 
+			AND ep.name = 'MS_Description'
+		WHERE t.name = @p1`)).WithArgs("users").WillReturnRows(sqlmock.NewRows([]string{"table_comment"}).AddRow(nil))
+				mock.ExpectQuery(regexp.QuoteMeta(`
+		SELECT 
+			c.name AS column_name,
+			ty.name AS data_type,
+			c.max_length,
+			c.precision,
+			c.scale,
+			c.is_nullable,
+			CAST(dc.definition AS NVARCHAR(MAX)) AS default_value,
+			CAST(ep.value AS NVARCHAR(MAX)) AS column_comment,
+			CASE WHEN pk.column_id IS NOT NULL THEN 1 ELSE 0 END AS is_primary_key,
+			c.is_identity AS is_auto_increment
+		FROM sys.columns c
+		INNER JOIN sys.types ty ON c.user_type_id = ty.user_type_id
+		INNER JOIN sys.tables t ON c.object_id = t.object_id
+		LEFT JOIN sys.default_constraints dc ON c.default_object_id = dc.object_id
+		LEFT JOIN sys.extended_properties ep ON c.object_id = ep.major_id AND c.column_id = ep.minor_id AND ep.name = 'MS_Description'
+		LEFT JOIN (
+			SELECT ic.object_id, ic.column_id
+			FROM sys.indexes i
+			INNER JOIN sys.index_columns ic ON i.object_id = ic.object_id AND i.index_id = ic.index_id
+			WHERE i.is_primary_key = 1
+		) pk ON c.object_id = pk.object_id AND c.column_id = pk.column_id
+		WHERE t.name = @p1
+		ORDER BY c.column_id
+	`)).WithArgs("users").WillReturnRows(sqlmock.NewRows([]string{
+					"column_name", "data_type", "max_length", "precision", "scale", "is_nullable", "default_value", "column_comment", "is_primary_key", "is_auto_increment",
+				}).AddRow("id", "int", 4, nil, nil, false, nil, nil, 1, false))
+				mock.ExpectQuery(regexp.QuoteMeta(`
+		SELECT 
+			i.name AS index_name,
+			i.type_desc AS index_type,
+			i.is_unique,
+			i.is_primary_key,
+			c.name AS column_name
+		FROM sys.indexes i
+		INNER JOIN sys.index_columns ic ON i.object_id = ic.object_id AND i.index_id = ic.index_id
+		INNER JOIN sys.columns c ON ic.object_id = c.object_id AND ic.column_id = c.column_id
+		INNER JOIN sys.tables t ON i.object_id = t.object_id
+		WHERE t.name = @p1 AND i.type > 0
+		ORDER BY i.name, ic.key_ordinal
+	`)).WithArgs("users").WillReturnError(errors.New("indexes boom"))
+			},
+		},
+		{
+			name: "foreign keys failure",
+			set: func(mock sqlmock.Sqlmock, ins *Inspector) {
+				mock.ExpectQuery(regexp.QuoteMeta(`SELECT CAST(ep.value AS NVARCHAR(MAX)) AS table_comment
+		FROM sys.tables t
+		LEFT JOIN sys.extended_properties ep 
+			ON t.object_id = ep.major_id 
+			AND ep.minor_id = 0 
+			AND ep.name = 'MS_Description'
+		WHERE t.name = @p1`)).WithArgs("users").WillReturnRows(sqlmock.NewRows([]string{"table_comment"}).AddRow(nil))
+				mock.ExpectQuery(regexp.QuoteMeta(`
+		SELECT 
+			c.name AS column_name,
+			ty.name AS data_type,
+			c.max_length,
+			c.precision,
+			c.scale,
+			c.is_nullable,
+			CAST(dc.definition AS NVARCHAR(MAX)) AS default_value,
+			CAST(ep.value AS NVARCHAR(MAX)) AS column_comment,
+			CASE WHEN pk.column_id IS NOT NULL THEN 1 ELSE 0 END AS is_primary_key,
+			c.is_identity AS is_auto_increment
+		FROM sys.columns c
+		INNER JOIN sys.types ty ON c.user_type_id = ty.user_type_id
+		INNER JOIN sys.tables t ON c.object_id = t.object_id
+		LEFT JOIN sys.default_constraints dc ON c.default_object_id = dc.object_id
+		LEFT JOIN sys.extended_properties ep ON c.object_id = ep.major_id AND c.column_id = ep.minor_id AND ep.name = 'MS_Description'
+		LEFT JOIN (
+			SELECT ic.object_id, ic.column_id
+			FROM sys.indexes i
+			INNER JOIN sys.index_columns ic ON i.object_id = ic.object_id AND i.index_id = ic.index_id
+			WHERE i.is_primary_key = 1
+		) pk ON c.object_id = pk.object_id AND c.column_id = pk.column_id
+		WHERE t.name = @p1
+		ORDER BY c.column_id
+	`)).WithArgs("users").WillReturnRows(sqlmock.NewRows([]string{
+					"column_name", "data_type", "max_length", "precision", "scale", "is_nullable", "default_value", "column_comment", "is_primary_key", "is_auto_increment",
+				}).AddRow("id", "int", 4, nil, nil, false, nil, nil, 1, false))
+				mock.ExpectQuery(regexp.QuoteMeta(`
+		SELECT 
+			i.name AS index_name,
+			i.type_desc AS index_type,
+			i.is_unique,
+			i.is_primary_key,
+			c.name AS column_name
+		FROM sys.indexes i
+		INNER JOIN sys.index_columns ic ON i.object_id = ic.object_id AND i.index_id = ic.index_id
+		INNER JOIN sys.columns c ON ic.object_id = c.object_id AND ic.column_id = c.column_id
+		INNER JOIN sys.tables t ON i.object_id = t.object_id
+		WHERE t.name = @p1 AND i.type > 0
+		ORDER BY i.name, ic.key_ordinal
+	`)).WithArgs("users").WillReturnRows(sqlmock.NewRows([]string{"index_name", "index_type", "is_unique", "is_primary_key", "column_name"}).
+					AddRow("PRIMARY", "CLUSTERED", true, true, "id"))
+				mock.ExpectQuery(regexp.QuoteMeta(`
+		SELECT 
+			fk.name AS fk_name,
+			pc.name AS column_name,
+			rt.name AS ref_table,
+			rc.name AS ref_column,
+			fk.delete_referential_action_desc AS on_delete
+		FROM sys.foreign_keys fk
+		INNER JOIN sys.foreign_key_columns fkc ON fk.object_id = fkc.constraint_object_id
+		INNER JOIN sys.tables pt ON fk.parent_object_id = pt.object_id
+		INNER JOIN sys.columns pc ON fkc.parent_object_id = pc.object_id AND fkc.parent_column_id = pc.column_id
+		INNER JOIN sys.tables rt ON fk.referenced_object_id = rt.object_id
+		INNER JOIN sys.columns rc ON fkc.referenced_object_id = rc.object_id AND fkc.referenced_column_id = rc.column_id
+		WHERE pt.name = @p1
+	`)).WithArgs("users").WillReturnError(errors.New("fks boom"))
+			},
+		},
+		{
+			name: "check constraints failure",
+			set: func(mock sqlmock.Sqlmock, ins *Inspector) {
+				mock.ExpectQuery(regexp.QuoteMeta(`SELECT CAST(ep.value AS NVARCHAR(MAX)) AS table_comment
+		FROM sys.tables t
+		LEFT JOIN sys.extended_properties ep 
+			ON t.object_id = ep.major_id 
+			AND ep.minor_id = 0 
+			AND ep.name = 'MS_Description'
+		WHERE t.name = @p1`)).WithArgs("users").WillReturnRows(sqlmock.NewRows([]string{"table_comment"}).AddRow(nil))
+				mock.ExpectQuery(regexp.QuoteMeta(`
+		SELECT 
+			c.name AS column_name,
+			ty.name AS data_type,
+			c.max_length,
+			c.precision,
+			c.scale,
+			c.is_nullable,
+			CAST(dc.definition AS NVARCHAR(MAX)) AS default_value,
+			CAST(ep.value AS NVARCHAR(MAX)) AS column_comment,
+			CASE WHEN pk.column_id IS NOT NULL THEN 1 ELSE 0 END AS is_primary_key,
+			c.is_identity AS is_auto_increment
+		FROM sys.columns c
+		INNER JOIN sys.types ty ON c.user_type_id = ty.user_type_id
+		INNER JOIN sys.tables t ON c.object_id = t.object_id
+		LEFT JOIN sys.default_constraints dc ON c.default_object_id = dc.object_id
+		LEFT JOIN sys.extended_properties ep ON c.object_id = ep.major_id AND c.column_id = ep.minor_id AND ep.name = 'MS_Description'
+		LEFT JOIN (
+			SELECT ic.object_id, ic.column_id
+			FROM sys.indexes i
+			INNER JOIN sys.index_columns ic ON i.object_id = ic.object_id AND i.index_id = ic.index_id
+			WHERE i.is_primary_key = 1
+		) pk ON c.object_id = pk.object_id AND c.column_id = pk.column_id
+		WHERE t.name = @p1
+		ORDER BY c.column_id
+	`)).WithArgs("users").WillReturnRows(sqlmock.NewRows([]string{
+					"column_name", "data_type", "max_length", "precision", "scale", "is_nullable", "default_value", "column_comment", "is_primary_key", "is_auto_increment",
+				}).AddRow("id", "int", 4, nil, nil, false, nil, nil, 1, false))
+				mock.ExpectQuery(regexp.QuoteMeta(`
+		SELECT 
+			i.name AS index_name,
+			i.type_desc AS index_type,
+			i.is_unique,
+			i.is_primary_key,
+			c.name AS column_name
+		FROM sys.indexes i
+		INNER JOIN sys.index_columns ic ON i.object_id = ic.object_id AND i.index_id = ic.index_id
+		INNER JOIN sys.columns c ON ic.object_id = c.object_id AND ic.column_id = c.column_id
+		INNER JOIN sys.tables t ON i.object_id = t.object_id
+		WHERE t.name = @p1 AND i.type > 0
+		ORDER BY i.name, ic.key_ordinal
+	`)).WithArgs("users").WillReturnRows(sqlmock.NewRows([]string{"index_name", "index_type", "is_unique", "is_primary_key", "column_name"}).
+					AddRow("PRIMARY", "CLUSTERED", true, true, "id"))
+				mock.ExpectQuery(regexp.QuoteMeta(`
+		SELECT 
+			fk.name AS fk_name,
+			pc.name AS column_name,
+			rt.name AS ref_table,
+			rc.name AS ref_column,
+			fk.delete_referential_action_desc AS on_delete
+		FROM sys.foreign_keys fk
+		INNER JOIN sys.foreign_key_columns fkc ON fk.object_id = fkc.constraint_object_id
+		INNER JOIN sys.tables pt ON fk.parent_object_id = pt.object_id
+		INNER JOIN sys.columns pc ON fkc.parent_object_id = pc.object_id AND fkc.parent_column_id = pc.column_id
+		INNER JOIN sys.tables rt ON fk.referenced_object_id = rt.object_id
+		INNER JOIN sys.columns rc ON fkc.referenced_object_id = rc.object_id AND fkc.referenced_column_id = rc.column_id
+		WHERE pt.name = @p1
+	`)).WithArgs("users").WillReturnRows(sqlmock.NewRows([]string{"fk_name", "column_name", "ref_table", "ref_column", "on_delete"}).
+					AddRow("fk_users_role", "role_id", "roles", "id", "NO_ACTION"))
+				mock.ExpectQuery(regexp.QuoteMeta(`
+		SELECT 
+			cc.name AS constraint_name,
+			cc.definition AS definition,
+			c.name AS column_name
+		FROM sys.check_constraints cc
+		LEFT JOIN sys.columns c ON cc.parent_column_id = c.column_id AND cc.parent_object_id = c.object_id
+		INNER JOIN sys.tables t ON cc.parent_object_id = t.object_id
+		WHERE t.name = @p1
+		ORDER BY cc.name
+	`)).WithArgs("users").WillReturnError(errors.New("checks boom"))
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			db, mock, err := sqlmock.New()
+			if err != nil {
+				t.Fatalf("failed to open sqlmock: %v", err)
+			}
+			defer db.Close()
+
+			ins := NewInspector(inspector.ConnectionConfig{})
+			ins.SetDB(db)
+			tt.set(mock, ins)
+
+			_, err = ins.GetTable(context.Background(), "users")
+			if err == nil {
+				t.Fatalf("expected error")
+			}
+			if err := mock.ExpectationsWereMet(); err != nil {
+				t.Fatalf("unmet expectations: %v", err)
+			}
+		})
 	}
 }
 

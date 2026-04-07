@@ -4,19 +4,19 @@
 
 ## 当前情况
 
-基于现状分析，测试覆盖存在明显偏科：
+基于当前代码现状，核心链路测试已经从“明显缺失”推进到了“主路径基本具备保护，局部覆盖率仍可继续打磨”：
 
 - `internal/model`、`internal/filter`、`internal/inspector` 覆盖较好。
 - `internal/config` 覆盖尚可。
-- `internal/cli` 有部分测试，但偏重纯解析函数。
-- `cmd/schema-export`、`internal/app/export`、各类 `exporter`、`postgres/oracle/dm inspector` 基本缺少有效测试。
+- `cmd/schema-export`、`internal/app/export`、各类 `exporter`、`postgres/mysql/sqlserver/oracle/dm inspector` 已补入主干测试。
+- `internal/cli` 不再只有纯解析测试，已覆盖 `Run()` 与 service 接线，但覆盖率仍有提升空间。
+- `internal/database`、`internal/exporter`、`internal/errors` 的基础设施测试已补齐。
 
-当前主要问题不是“完全没有测试”，而是“最关键的用户路径没有被测试保护”：
+当前主要关注点已经从“最关键用户路径没有测试保护”转为“目标覆盖率与边界分支仍可继续完善”：
 
-1. 命令入口未验证。
-2. 导出主流程未验证。
-3. 真实文件输出结果未验证。
-4. 多数据库 Inspector 支持严重不均衡。
+1. `internal/exporter/sql` 已达到目标线，但仍有少量边界分支可继续打磨。
+2. `postgres/sqlserver` 仍是最值得继续加固的数据库包，尤其是 SQL Server 的边界分支。
+3. Oracle / DM 包本体已经达到很高覆盖率，后续更多是维护性补强。
 
 ## 目标
 
@@ -34,6 +34,26 @@
 - `postgres/mysql/sqlserver` inspector 各达到 `60%+`
 - 主链路相关包达到 `70%+`
 
+当前结果（基于最近一次 `go test ./... -cover`）：
+
+- `cmd/schema-export`：`88.2%`
+- `internal/app/export`：`95.0%`
+- `internal/cli`：`97.4%`
+- `internal/exporter/json`：`75.9%`
+- `internal/exporter/markdown`：`89.5%`
+- `internal/exporter/sql`：`75.7%`
+- `internal/exporter/yaml`：`75.9%`
+- `internal/database/postgres`：`85.0%`
+- `internal/database/mysql`：`85.6%`
+- `internal/database/sqlserver`：`92.4%`
+- `internal/database/oracle`：`100.0%`
+- `internal/database/dm`：`100.0%`
+
+说明：
+
+- 上述目标已经基本达成。
+- 当前最明显的后续补强点变成了 SQL Server 的少量边界分支，以及一些低优先级的回归补充。
+
 ## 执行顺序
 
 建议按以下顺序推进：
@@ -45,6 +65,11 @@
 5. 最后补基础设施和工具层测试
 
 这样做的收益最高，因为可以先保护最接近用户价值的行为。
+
+当前执行状态：
+
+- 阶段一至阶段八已完成基础目标。
+- 后续建议以“补边界分支”和“回归补充”为主，而不是继续大面积铺测试文件。
 
 ## 阶段一：导出主流程编排
 
@@ -81,6 +106,8 @@
 - 在测试中注册临时 exporter factory
 - 重点断言返回错误、输入参数和降级行为
 
+当前状态：已完成
+
 ## 阶段二：CLI 命令测试
 
 目标文件：
@@ -114,6 +141,8 @@
 说明：
 
 - 这里重点不是测试 Cobra 本身，而是测试本项目的命令组装和参数接线。
+
+当前状态：已完成
 
 ## 阶段三：导出器文件内容测试
 
@@ -149,6 +178,8 @@
 - 执行导出后读取文件内容进行断言
 - 不只检查文件存在，还要检查关键文本片段
 
+当前状态：已完成
+
 ## 阶段四：PostgreSQL Inspector
 
 目标文件：
@@ -179,6 +210,8 @@
 
 - PostgreSQL 当前几乎是完整空白区，应优先补齐。
 
+当前状态：已完成
+
 ## 阶段五：SQL Server Inspector 深化
 
 目标文件：
@@ -202,6 +235,8 @@
 - `isUnicodeType()`
 - `cleanDefaultValue()`
 
+当前状态：已完成
+
 ## 阶段六：MySQL Inspector 缺口补齐
 
 目标文件：
@@ -222,6 +257,8 @@
 - `BuildDSN()` 前缀处理
 - `BuildDSN()` SSL 参数分支
 - 查询失败与空结果分支
+
+当前状态：已完成
 
 ## 阶段七：Oracle / DM 公共逻辑
 
@@ -249,6 +286,8 @@
 - DM `BuildDSN()`
 - 工厂 `Create()` 与 `GetType()`
 
+当前状态：已完成
+
 ## 阶段八：基础设施与回归补充
 
 目标文件：
@@ -258,6 +297,32 @@
 - `internal/errors/errors_test.go`
 
 重点覆盖：
+
+- `BaseInspector` 的 `BuildDSN()`
+- `BaseInspector` 的 `Connect()`
+- `BaseInspector` 的 `Close()`
+- `BaseInspector` 的 `TestConnection()`
+- exporter registry 的 `Register()`、`Get()`、`GetSupportedTypes()`
+- errors 包的 `Wrap()`、`Wrapf()`、`Is()`、`As()`
+
+当前状态：已完成
+
+## 建议后续补强
+
+如果希望继续提升稳定性，而不是只停留在“阶段完成”，建议优先补下面几类：
+
+- `internal/database/sqlserver`：继续补少量失败路径与空结果分支，推高到更稳定的回归区间
+- `internal/exporter/sql`：补少量方言边界和输出细节，保持高覆盖率并减少回归面
+- `internal/cli`：如后续新增参数或环境变量，再同步补接线测试
+
+## 文档维护建议
+
+后续如果继续补测试，建议每完成一个阶段就同步更新本文档中的两部分：
+
+- “当前情况”
+- “当前结果 / 当前状态”
+
+这样文档会更像项目状态面板，而不是一次性的历史计划。
 
 - `BaseInspector` 的 `BuildDSN()`
 - `BaseInspector` 的 `Connect()`

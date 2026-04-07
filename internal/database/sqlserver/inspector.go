@@ -14,6 +14,8 @@ import (
 	"github.com/schema-export/schema-export/internal/model"
 )
 
+var openDB = sql.Open
+
 // Inspector SQL Server 数据库 Inspector 实现
 type Inspector struct {
 	*database.BaseInspector
@@ -30,7 +32,7 @@ func NewInspector(config inspector.ConnectionConfig) *Inspector {
 func (i *Inspector) Connect(ctx context.Context) error {
 	dsn := i.BuildDSN()
 
-	db, err := sql.Open("sqlserver", dsn)
+	db, err := openDB("sqlserver", dsn)
 	if err != nil {
 		return fmt.Errorf("failed to open sqlserver connection: %w", err)
 	}

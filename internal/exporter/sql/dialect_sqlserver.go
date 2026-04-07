@@ -23,10 +23,10 @@ func (d *SQLServerDialect) GetDataType(col *model.Column) string {
 
 	switch dataType {
 	case "VARCHAR", "NVARCHAR", "CHAR", "NCHAR":
+		if col.Length == -1 {
+			return dataType + "(MAX)"
+		}
 		if col.Length > 0 {
-			if col.Length == -1 {
-				return dataType + "(MAX)"
-			}
 			return fmt.Sprintf("%s(%d)", dataType, col.Length)
 		}
 		return dataType
@@ -48,10 +48,10 @@ func (d *SQLServerDialect) GetDataType(col *model.Column) string {
 		}
 		return "TIME"
 	case "VARBINARY", "BINARY":
+		if col.Length == -1 {
+			return "VARBINARY(MAX)"
+		}
 		if col.Length > 0 {
-			if col.Length == -1 {
-				return "VARBINARY(MAX)"
-			}
 			return fmt.Sprintf("%s(%d)", dataType, col.Length)
 		}
 		return dataType

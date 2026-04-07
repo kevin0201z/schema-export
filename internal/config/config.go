@@ -40,15 +40,15 @@ type Config struct {
 //   - Schema: 数据库 Schema（用于 Oracle/达梦）
 //   - SSLMode: SSL 连接模式（用于 PostgreSQL）
 type DatabaseConfig struct {
-	Type     string `yaml:"type" json:"type"`           // 数据库类型
-	Host     string `yaml:"host" json:"host"`           // 数据库主机
-	Port     int    `yaml:"port" json:"port"`           // 数据库端口
-	Database string `yaml:"database" json:"database"`   // 数据库名
-	Username string `yaml:"username" json:"username"`   // 用户名
-	Password string `yaml:"password" json:"password"`   // 密码
-	DSN      string `yaml:"dsn" json:"dsn"`             // DSN 连接字符串
-	Schema   string `yaml:"schema" json:"schema"`       // 数据库 Schema
-	SSLMode  string `yaml:"ssl_mode" json:"ssl_mode"`   // SSL 模式
+	Type     string `yaml:"type" json:"type"`         // 数据库类型
+	Host     string `yaml:"host" json:"host"`         // 数据库主机
+	Port     int    `yaml:"port" json:"port"`         // 数据库端口
+	Database string `yaml:"database" json:"database"` // 数据库名
+	Username string `yaml:"username" json:"username"` // 用户名
+	Password string `yaml:"password" json:"password"` // 密码
+	DSN      string `yaml:"dsn" json:"dsn"`           // DSN 连接字符串
+	Schema   string `yaml:"schema" json:"schema"`     // 数据库 Schema
+	SSLMode  string `yaml:"ssl_mode" json:"ssl_mode"` // SSL 模式
 }
 
 // ExportConfig 导出选项配置。
@@ -68,17 +68,17 @@ type DatabaseConfig struct {
 //   - IncludeTriggers: 是否导出触发器
 //   - IncludeSequences: 是否导出序列
 type ExportConfig struct {
-	OutputDir         string   `yaml:"output_dir" json:"output_dir"`                   // 输出目录
-	Formats           []string `yaml:"formats" json:"formats"`                         // 导出格式
-	SplitFiles        bool     `yaml:"split_files" json:"split_files"`                 // 分文件导出
-	Tables            []string `yaml:"tables" json:"tables"`                           // 要导出的表
-	Exclude           []string `yaml:"exclude" json:"exclude"`                         // 要排除的表
-	Patterns          []string `yaml:"patterns" json:"patterns"`                       // 表名匹配模式
-	IncludeViews      bool     `yaml:"include_views" json:"include_views"`             // 包含视图
-	IncludeProcedures bool     `yaml:"include_procedures" json:"include_procedures"`   // 包含存储过程
-	IncludeFunctions  bool     `yaml:"include_functions" json:"include_functions"`     // 包含函数
-	IncludeTriggers   bool     `yaml:"include_triggers" json:"include_triggers"`       // 包含触发器
-	IncludeSequences  bool     `yaml:"include_sequences" json:"include_sequences"`     // 包含序列
+	OutputDir         string   `yaml:"output_dir" json:"output_dir"`                 // 输出目录
+	Formats           []string `yaml:"formats" json:"formats"`                       // 导出格式
+	SplitFiles        bool     `yaml:"split_files" json:"split_files"`               // 分文件导出
+	Tables            []string `yaml:"tables" json:"tables"`                         // 要导出的表
+	Exclude           []string `yaml:"exclude" json:"exclude"`                       // 要排除的表
+	Patterns          []string `yaml:"patterns" json:"patterns"`                     // 表名匹配模式
+	IncludeViews      bool     `yaml:"include_views" json:"include_views"`           // 包含视图
+	IncludeProcedures bool     `yaml:"include_procedures" json:"include_procedures"` // 包含存储过程
+	IncludeFunctions  bool     `yaml:"include_functions" json:"include_functions"`   // 包含函数
+	IncludeTriggers   bool     `yaml:"include_triggers" json:"include_triggers"`     // 包含触发器
+	IncludeSequences  bool     `yaml:"include_sequences" json:"include_sequences"`   // 包含序列
 }
 
 // ToConnectionConfig 将 DatabaseConfig 转换为 Inspector 连接配置。

@@ -1,12 +1,12 @@
 # 数据库结构导出工具
 
-一个当前支持达梦数据库（DM）、Oracle、SQL Server、MySQL 的跨数据库结构导出工具。
+一个支持达梦（DM）、Oracle、SQL Server 等数据库结构导出工具。
 
 可生成 Markdown、SQL DDL、JSON、YAML 格式的数据库结构文档。
 
 ## 功能特性
 
-- **多数据库支持**：达梦（DM）、Oracle、SQL Server、MySQL
+- **多数据库支持**：达梦（DM）、Oracle、SQL Server、MySQL、PostgreSQL
 - **多种导出格式**：Markdown、SQL DDL、JSON、YAML
 - **灵活的导出模式**：单文件或按表分文件导出
 - **数据库对象支持**：表、视图、存储过程、函数、触发器、序列
@@ -131,9 +131,9 @@ export EXPORT_INCLUDE_VIEWS=true
 
 ### export 命令参数
 
-| 参数           | 默认值      | 说明                              |
-| ------------ | -------- | ------------------------------- |
-| `--type`     | dm       | 数据库类型（dm、oracle、sqlserver、mysql） |
+| 参数           | 默认值      | 说明                                        |
+| ------------ | -------- | ----------------------------------------- |
+| `--type`     | dm       | 数据库类型（dm、oracle、sqlserver、mysql、postgres） |
 | `--host`     | <br />   | 数据库主机                           |
 | `--port`     | 0        | 数据库端口                           |
 | `--database` | <br />   | 数据库名                            |
@@ -246,8 +246,7 @@ export EXPORT_INCLUDE_VIEWS=true
 | Oracle     | ✅ 已支持  | go-ora（纯 Go 驱动）       |
 | SQL Server | ✅ 已支持  | go-mssqldb（纯 Go 驱动）   |
 | MySQL      | ✅ 已支持  | go-sql-driver/mysql（纯 Go 驱动） |
-
-后续如需扩展 PostgreSQL、SQLite，可通过新增对应 Inspector 实现接入。
+| PostgreSQL | ✅ 已支持  | lib/pq（纯 Go 驱动）       |
 
 ## 架构
 
@@ -267,7 +266,7 @@ export EXPORT_INCLUDE_VIEWS=true
 | **Config** | 配置管理、环境变量、配置校验 | `internal/config/` |
 | **Filter** | 表过滤规则 | `internal/filter/` |
 | **Inspector** | 数据库元数据查询接口 | `internal/inspector/interface.go` |
-| **Database** | 各数据库 Inspector 实现 | `internal/database/dm/`, `internal/database/oracle/`, `internal/database/sqlserver/`, `internal/database/mysql/` |
+| **Database** | 各数据库 Inspector 实现 | `internal/database/dm/`, `internal/database/oracle/`, `internal/database/sqlserver/`, `internal/database/mysql/`, `internal/database/postgres/` |
 | **Model** | 数据模型定义 | `internal/model/` |
 | **Exporter** | 导出格式实现 | `internal/exporter/markdown/`, `internal/exporter/sql/` |
 | **Third-Party** | 仓库内置第三方驱动源码 | `third_party/dm-go-driver/` |

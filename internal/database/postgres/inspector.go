@@ -7,7 +7,7 @@ import (
 	"sort"
 	"strings"
 
-	_ "github.com/lib/pq" // PostgreSQL Go 驱动
+	pq "github.com/lib/pq" // PostgreSQL Go 驱动
 
 	"github.com/schema-export/schema-export/internal/database"
 	"github.com/schema-export/schema-export/internal/inspector"
@@ -149,6 +149,18 @@ func (i *Inspector) GetTable(ctx context.Context, tableName string) (*model.Tabl
 	}
 	sort.Slice(indexes, func(i, j int) bool { return indexes[i].Name < indexes[j].Name })
 	table.Indexes = indexes
+	for _, idx := range indexes {
+		if !idx.IsPrimary {
+			continue
+		}
+		for _, pkColumn := range idx.Columns {
+			for i := range table.Columns {
+				if table.Columns[i].Name == pkColumn {
+					table.Columns[i].IsPrimaryKey = true
+				}
+			}
+		}
+	}
 
 	foreignKeys, err := i.GetForeignKeys(ctx, tableName)
 	if err != nil {
@@ -257,7 +269,7 @@ func (i *Inspector) GetIndexes(ctx context.Context, tableName string) ([]model.I
 	for rows.Next() {
 		var name, indexType string
 		var isUnique, isPrimary bool
-		var columns []string
+		var columns pq.StringArray
 		if err := rows.Scan(&name, &indexType, &isUnique, &isPrimary, &columns); err != nil {
 			return nil, err
 		}
@@ -366,7 +378,7 @@ func (i *Inspector) GetCheckConstraints(ctx context.Context, tableName string) (
 	constraintMap := make(map[string]*model.CheckConstraint)
 	for rows.Next() {
 		var name, definition string
-		var columns []string
+		var columns pq.StringArray
 		if err := rows.Scan(&name, &definition, &columns); err != nil {
 			return nil, err
 		}

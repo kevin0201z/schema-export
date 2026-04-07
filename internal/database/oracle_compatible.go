@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/schema-export/schema-export/internal/inspector"
 	"github.com/schema-export/schema-export/internal/model"
@@ -232,7 +233,7 @@ const (
 			t.TABLE_NAME,
 			t.TRIGGERING_EVENT,
 			t.STATUS,
-			t.TRIGGER_BODY
+			t.TRIGGER_TYPE
 		FROM ALL_TRIGGERS t
 		WHERE t.TABLE_NAME = %s AND t.OWNER = %s
 		ORDER BY t.TRIGGER_NAME
@@ -243,7 +244,7 @@ const (
 			t.TABLE_NAME,
 			t.TRIGGERING_EVENT,
 			t.STATUS,
-			t.TRIGGER_BODY
+			t.TRIGGER_TYPE
 		FROM USER_TRIGGERS t
 		WHERE t.TABLE_NAME = %s
 		ORDER BY t.TRIGGER_NAME
@@ -869,9 +870,8 @@ func (o *OracleCompatibleInspector) queryTriggers(ctx context.Context, tableName
 
 	var triggers []model.Trigger
 	for rows.Next() {
-		var name, tblName, event, status string
-		var body sql.NullString
-		if err := rows.Scan(&name, &tblName, &event, &status, &body); err != nil {
+		var name, tblName, event, status, triggerType string
+		if err := rows.Scan(&name, &tblName, &event, &status, &triggerType); err != nil {
 			return nil, err
 		}
 
@@ -880,14 +880,37 @@ func (o *OracleCompatibleInspector) queryTriggers(ctx context.Context, tableName
 			TableName: tblName,
 			Event:     event,
 			Status:    status,
-		}
-		if body.Valid {
-			tr.Definition = body.String
+			Timing:    parseTriggerTiming(triggerType),
 		}
 		triggers = append(triggers, tr)
 	}
 
+	for i := range triggers {
+		def, err := o.querySource(ctx, triggers[i].Name, "TRIGGER", schema)
+		if err == nil && def != "" {
+			triggers[i].Definition = def
+		}
+	}
+
 	return triggers, rows.Err()
+}
+
+// parseTriggerTiming 从 TRIGGER_TYPE 解析触发时机
+func parseTriggerTiming(triggerType string) string {
+	if triggerType == "" {
+		return ""
+	}
+	upperType := strings.ToUpper(triggerType)
+	if strings.HasPrefix(upperType, "BEFORE") {
+		return "BEFORE"
+	}
+	if strings.HasPrefix(upperType, "AFTER") {
+		return "AFTER"
+	}
+	if strings.HasPrefix(upperType, "INSTEAD OF") {
+		return "INSTEAD OF"
+	}
+	return ""
 }
 
 // querySequences 查询序列列表

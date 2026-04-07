@@ -110,7 +110,9 @@ func (e *Exporter) exportSingleFile(tables []model.Table, views []model.View, pr
 		fmt.Fprintln(file, "")
 
 		for _, proc := range procedures {
-			e.writeProcedureDDL(file, &proc)
+			if err := e.writeProcedureDDL(file, &proc); err != nil {
+				return err
+			}
 			fmt.Fprintln(file, "")
 		}
 	}
@@ -122,7 +124,9 @@ func (e *Exporter) exportSingleFile(tables []model.Table, views []model.View, pr
 		fmt.Fprintln(file, "")
 
 		for _, fn := range functions {
-			e.writeFunctionDDL(file, &fn)
+			if err := e.writeFunctionDDL(file, &fn); err != nil {
+				return err
+			}
 			fmt.Fprintln(file, "")
 		}
 	}
@@ -134,7 +138,9 @@ func (e *Exporter) exportSingleFile(tables []model.Table, views []model.View, pr
 		fmt.Fprintln(file, "")
 
 		for _, tr := range triggers {
-			e.writeTriggerDDL(file, &tr)
+			if err := e.writeTriggerDDL(file, &tr); err != nil {
+				return err
+			}
 			fmt.Fprintln(file, "")
 		}
 	}
@@ -146,7 +152,9 @@ func (e *Exporter) exportSingleFile(tables []model.Table, views []model.View, pr
 		fmt.Fprintln(file, "")
 
 		for _, seq := range sequences {
-			e.writeSequenceDDL(file, &seq)
+			if err := e.writeSequenceDDL(file, &seq); err != nil {
+				return err
+			}
 			fmt.Fprintln(file, "")
 		}
 	}
@@ -222,7 +230,10 @@ func (e *Exporter) exportSplitFiles(tables []model.Table, views []model.View, pr
 			}
 			fmt.Fprintf(file, "-- ========================================================\n")
 			fmt.Fprintln(file, "")
-			e.writeProcedureDDL(file, &proc)
+			if err := e.writeProcedureDDL(file, &proc); err != nil {
+				file.Close()
+				return err
+			}
 			file.Close()
 		}
 	}
@@ -241,7 +252,10 @@ func (e *Exporter) exportSplitFiles(tables []model.Table, views []model.View, pr
 			}
 			fmt.Fprintf(file, "-- ========================================================\n")
 			fmt.Fprintln(file, "")
-			e.writeFunctionDDL(file, &fn)
+			if err := e.writeFunctionDDL(file, &fn); err != nil {
+				file.Close()
+				return err
+			}
 			file.Close()
 		}
 	}
@@ -258,7 +272,10 @@ func (e *Exporter) exportSplitFiles(tables []model.Table, views []model.View, pr
 			fmt.Fprintf(file, "-- Table: %s\n", tr.TableName)
 			fmt.Fprintf(file, "-- ========================================================\n")
 			fmt.Fprintln(file, "")
-			e.writeTriggerDDL(file, &tr)
+			if err := e.writeTriggerDDL(file, &tr); err != nil {
+				file.Close()
+				return err
+			}
 			file.Close()
 		}
 	}
@@ -274,7 +291,10 @@ func (e *Exporter) exportSplitFiles(tables []model.Table, views []model.View, pr
 			fmt.Fprintf(file, "-- Sequence: %s\n", seq.Name)
 			fmt.Fprintf(file, "-- ========================================================\n")
 			fmt.Fprintln(file, "")
-			e.writeSequenceDDL(file, &seq)
+			if err := e.writeSequenceDDL(file, &seq); err != nil {
+				file.Close()
+				return err
+			}
 			file.Close()
 		}
 	}
@@ -405,7 +425,7 @@ func (e *Exporter) writeViewDDL(file *os.File, view *model.View) error {
 	return nil
 }
 
-func (e *Exporter) writeProcedureDDL(file *os.File, proc *model.Procedure) {
+func (e *Exporter) writeProcedureDDL(file *os.File, proc *model.Procedure) error {
 	fmt.Fprintf(file, "-- --------------------------------------------------------\n")
 	fmt.Fprintf(file, "-- Procedure: %s\n", proc.Name)
 	fmt.Fprintln(file, "-- --------------------------------------------------------")
@@ -420,9 +440,10 @@ func (e *Exporter) writeProcedureDDL(file *os.File, proc *model.Procedure) {
 			fmt.Fprintln(file, ";")
 		}
 	}
+	return nil
 }
 
-func (e *Exporter) writeFunctionDDL(file *os.File, fn *model.Function) {
+func (e *Exporter) writeFunctionDDL(file *os.File, fn *model.Function) error {
 	fmt.Fprintf(file, "-- --------------------------------------------------------\n")
 	fmt.Fprintf(file, "-- Function: %s\n", fn.Name)
 	fmt.Fprintln(file, "-- --------------------------------------------------------")
@@ -440,9 +461,10 @@ func (e *Exporter) writeFunctionDDL(file *os.File, fn *model.Function) {
 			fmt.Fprintln(file, ";")
 		}
 	}
+	return nil
 }
 
-func (e *Exporter) writeTriggerDDL(file *os.File, tr *model.Trigger) {
+func (e *Exporter) writeTriggerDDL(file *os.File, tr *model.Trigger) error {
 	fmt.Fprintf(file, "-- --------------------------------------------------------\n")
 	fmt.Fprintf(file, "-- Trigger: %s\n", tr.Name)
 	fmt.Fprintln(file, "-- --------------------------------------------------------")
@@ -462,9 +484,10 @@ func (e *Exporter) writeTriggerDDL(file *os.File, tr *model.Trigger) {
 			fmt.Fprintln(file, ";")
 		}
 	}
+	return nil
 }
 
-func (e *Exporter) writeSequenceDDL(file *os.File, seq *model.Sequence) {
+func (e *Exporter) writeSequenceDDL(file *os.File, seq *model.Sequence) error {
 	fmt.Fprintf(file, "-- --------------------------------------------------------\n")
 	fmt.Fprintf(file, "-- Sequence: %s\n", seq.Name)
 	fmt.Fprintln(file, "-- --------------------------------------------------------")
@@ -487,6 +510,7 @@ func (e *Exporter) writeSequenceDDL(file *os.File, seq *model.Sequence) {
 		fmt.Fprintf(file, "    CACHE %d\n", seq.CacheSize)
 	}
 	fmt.Fprintln(file, ";")
+	return nil
 }
 
 func (e *Exporter) quoteColumns(columns []string) string {

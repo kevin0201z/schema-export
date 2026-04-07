@@ -7,6 +7,14 @@ import (
 	"github.com/schema-export/schema-export/internal/config"
 )
 
+type exportService interface {
+	Run() error
+}
+
+var newService = func(cfg *config.Config) exportService {
+	return exportapp.NewService(cfg)
+}
+
 // ExportCommand 导出命令
 type ExportCommand struct {
 	Config *config.Config
@@ -26,7 +34,7 @@ func (c *ExportCommand) Run() error {
 		return err
 	}
 
-	return exportapp.NewService(c.Config).Run()
+	return newService(c.Config).Run()
 }
 
 // SetDatabaseType 设置数据库类型

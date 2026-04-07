@@ -34,5 +34,6 @@ pre-commit run --all-files
 
 5. 常见问题
 - 如果你在运行 `golangci-lint` 时遇到 analyzer export-data 错误，请确保你安装的 `golangci-lint` 版本与 CI 中使用的版本一致（见 `docs/DEV_SETUP.md`）。
+- 如果你准备补测试或提升覆盖率，建议先查看 `docs/TEST_PLAN.md` 中的测试增补路线图。
 
 感谢贡献！

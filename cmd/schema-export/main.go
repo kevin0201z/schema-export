@@ -26,6 +26,8 @@ var (
 	date    = "unknown"
 )
 
+var newExportCommand = cli.NewExportCommand
+
 func main() {
 	if err := newRootCmd().Execute(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
@@ -50,7 +52,7 @@ Generate database structure documentation in Markdown and SQL DDL formats.`,
 }
 
 func newExportCmd() *cobra.Command {
-	cmd := cli.NewExportCommand()
+	cmd := newExportCommand()
 
 	exportCmd := &cobra.Command{
 		Use:   "export",

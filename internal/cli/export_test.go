@@ -8,9 +8,45 @@ import (
 	"time"
 
 	exportapp "github.com/schema-export/schema-export/internal/app/export"
+	"github.com/schema-export/schema-export/internal/config"
 	"github.com/schema-export/schema-export/internal/exporter"
 	"github.com/schema-export/schema-export/internal/model"
 )
+
+type stubExportService struct {
+	runCalled bool
+	cfg       *config.Config
+	runErr    error
+}
+
+func (s *stubExportService) Run() error {
+	s.runCalled = true
+	return s.runErr
+}
+
+func clearExportEnv(t *testing.T) {
+	t.Helper()
+	for _, key := range []string{
+		"DB_TYPE",
+		"DB_HOST",
+		"DB_PORT",
+		"DB_DATABASE",
+		"DB_USERNAME",
+		"DB_PASSWORD",
+		"DB_DSN",
+		"DB_SCHEMA",
+		"EXPORT_OUTPUT",
+		"EXPORT_FORMATS",
+		"EXPORT_SPLIT",
+		"EXPORT_INCLUDE_VIEWS",
+		"EXPORT_INCLUDE_PROCEDURES",
+		"EXPORT_INCLUDE_FUNCTIONS",
+		"EXPORT_INCLUDE_TRIGGERS",
+		"EXPORT_INCLUDE_SEQUENCES",
+	} {
+		t.Setenv(key, "")
+	}
+}
 
 func TestParseFormats(t *testing.T) {
 	tests := []struct {
@@ -263,5 +299,46 @@ func TestExportAllFormats(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestExportCommandRunValidatesConfig(t *testing.T) {
+	clearExportEnv(t)
+
+	cmd := NewExportCommand()
+	cmd.Config.Database.Type = ""
+
+	err := cmd.Run()
+	if err == nil || !strings.Contains(err.Error(), "database type is required") {
+		t.Fatalf("expected validation error, got %v", err)
+	}
+}
+
+func TestExportCommandRunInvokesService(t *testing.T) {
+	clearExportEnv(t)
+
+	cmd := NewExportCommand()
+	cmd.Config.Database.Type = "mysql"
+	cmd.Config.Database.Host = "127.0.0.1"
+	cmd.Config.Database.Username = "root"
+	cmd.Config.Export.Formats = []string{"markdown"}
+
+	originalNewService := newService
+	defer func() { newService = originalNewService }()
+
+	stub := &stubExportService{}
+	newService = func(cfg *config.Config) exportService {
+		stub.cfg = cfg
+		return stub
+	}
+
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("Run() failed: %v", err)
+	}
+	if !stub.runCalled {
+		t.Fatalf("expected service Run to be called")
+	}
+	if stub.cfg != cmd.Config {
+		t.Fatalf("expected config pointer to be forwarded")
 	}
 }

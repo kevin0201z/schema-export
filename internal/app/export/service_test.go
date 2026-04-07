@@ -385,8 +385,8 @@ func TestRunIncludesSupplementalObjects(t *testing.T) {
 		functions:        []model.Function{{Name: "format_name"}},
 		sequences:        []model.Sequence{{Name: "user_seq"}},
 		triggersByTbl: map[string][]model.Trigger{
-			"users":  []model.Trigger{{Name: "users_trigger"}},
-			"orders": []model.Trigger{{Name: "orders_trigger"}},
+			"users":  {{Name: "users_trigger"}},
+			"orders": {{Name: "orders_trigger"}},
 		},
 	}
 	registerMockInspector(t, dbType, ins, nil)

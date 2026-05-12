@@ -27,7 +27,7 @@ const (
 // TuiState 存储所有表单输入值。
 type TuiState struct {
 	// 数据库连接
-	DBType           string           // 数据库类型: dm/oracle/sqlserver/mysql/postgres
+	DBType           string           // 数据库类型: dm/oracle/sqlserver/mysql/postgres/sqlite
 	ConnectionMethod ConnectionMethod // 连接方式
 	DSN              string           // DSN 连接字符串
 	Host             string           // 主机地址
@@ -65,7 +65,7 @@ const (
 )
 
 // 数据库类型选项。
-var dbTypeOptions = []string{"dm", "oracle", "sqlserver", "mysql", "postgres"}
+var dbTypeOptions = []string{"dm", "oracle", "sqlserver", "mysql", "postgres", "sqlite"}
 
 // 导出格式选项。
 var formatOptions = []string{"markdown", "sql", "json", "yaml"}
@@ -82,4 +82,23 @@ var contentOptions = []contentOption{
 	{label: "函数 (Functions)", key: "functions"},
 	{label: "触发器 (Triggers)", key: "triggers"},
 	{label: "序列 (Sequences)", key: "sequences"},
+}
+
+func contentOptionsForDBType(dbType string) []contentOption {
+	if isSQLiteDBType(dbType) {
+		return []contentOption{
+			{label: "视图 (Views)", key: "views"},
+			{label: "触发器 (Triggers)", key: "triggers"},
+		}
+	}
+	return contentOptions
+}
+
+func (s *TuiState) normalizeContentOptionsForDBType() {
+	if !isSQLiteDBType(s.DBType) {
+		return
+	}
+	s.IncludeProcedures = false
+	s.IncludeFunctions = false
+	s.IncludeSequences = false
 }

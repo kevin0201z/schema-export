@@ -30,13 +30,13 @@ type Config struct {
 // 对于 Oracle 和达梦数据库，Schema 参数用于指定要导出的 Schema。
 //
 // 字段说明:
-//   - Type: 数据库类型（dm, oracle, sqlserver, mysql, postgres）
+//   - Type: 数据库类型（dm, oracle, sqlserver, mysql, postgres, sqlite）
 //   - Host: 数据库主机地址
 //   - Port: 数据库端口号
-//   - Database: 数据库名称
+//   - Database: 数据库名称；对 SQLite 表示数据库文件路径
 //   - Username: 数据库用户名
 //   - Password: 数据库密码
-//   - DSN: 完整的数据源名称（Data Source Name）
+//   - DSN: 完整的数据源名称（Data Source Name）；对 SQLite 可为文件路径、URI 或 :memory:
 //   - Schema: 数据库 Schema（用于 Oracle/达梦）
 //   - SSLMode: SSL 连接模式（用于 PostgreSQL）
 type DatabaseConfig struct {
@@ -179,7 +179,7 @@ func (c *Config) LoadFromEnv() {
 // Validate 验证配置的有效性。
 //
 // 该方法执行以下验证和规范化操作：
-//  1. 检查必需字段（数据库类型、主机或 DSN、用户名）
+//  1. 检查必需字段（数据库类型，以及与数据库类型匹配的连接参数）
 //  2. 从 DSN 中提取 Schema 参数（如果未显式指定）
 //  3. 规范化 Schema 名称（Oracle/达梦转大写）
 //  4. 规范化导出格式（转小写、去空白）
@@ -190,6 +190,21 @@ func (c *Config) LoadFromEnv() {
 func (c *Config) Validate() error {
 	if c.Database.Type == "" {
 		return fmt.Errorf("database type is required")
+	}
+
+	if strings.EqualFold(strings.TrimSpace(c.Database.Type), "sqlite") {
+		if strings.TrimSpace(c.Database.DSN) == "" && strings.TrimSpace(c.Database.Database) == "" {
+			return fmt.Errorf("sqlite requires DSN or database file path")
+		}
+
+		c.Export.Formats = normalizeFormats(c.Export.Formats)
+		if len(c.Export.Formats) == 0 {
+			c.Export.Formats = []string{"markdown"}
+		}
+		if c.Export.OutputDir == "" {
+			c.Export.OutputDir = "./output"
+		}
+		return nil
 	}
 
 	if c.Database.DSN == "" {

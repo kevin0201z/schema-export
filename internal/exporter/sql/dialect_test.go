@@ -19,6 +19,7 @@ func TestGetDialect(t *testing.T) {
 		{name: "mysql", db: "mysql", want: "mysql"},
 		{name: "postgres", db: "postgres", want: "postgres"},
 		{name: "postgresql", db: "postgresql", want: "postgres"},
+		{name: "sqlite", db: "sqlite", want: "sqlite"},
 		{name: "default", db: "other", want: "generic"},
 	}
 
@@ -248,5 +249,48 @@ func TestSQLServerDialect(t *testing.T) {
 	}
 	if !d.SupportsInlineCheck() {
 		t.Fatalf("sqlserver should support inline check")
+	}
+}
+
+func TestSQLiteDialect(t *testing.T) {
+	d := &SQLiteDialect{}
+
+	if d.GetName() != "sqlite" {
+		t.Fatalf("unexpected name")
+	}
+	if got := d.QuoteIdentifier("users"); got != "\"users\"" {
+		t.Fatalf("unexpected quote: %s", got)
+	}
+	if got := d.GetDataType(&model.Column{DataType: "TEXT"}); got != "TEXT" {
+		t.Fatalf("unexpected datatype: %s", got)
+	}
+	if got := d.GetDefaultValue(&model.Column{DefaultValue: "CURRENT_TIMESTAMP"}); got != "DEFAULT CURRENT_TIMESTAMP" {
+		t.Fatalf("unexpected default value: %s", got)
+	}
+
+	col := &model.Column{Name: "id", DataType: "INTEGER", IsAutoIncrement: true, IsNullable: false, CheckConstraint: "(id > 0)"}
+	if got := d.GetColumnDefinition(col); !strings.Contains(got, "AUTOINCREMENT") || !strings.Contains(got, "CHECK (id > 0)") {
+		t.Fatalf("unexpected column definition: %s", got)
+	}
+	if d.EmitPrimaryKeyInline() {
+		t.Fatal("sqlite should not emit primary key inline")
+	}
+	if got := d.GetCheckConstraint(&model.CheckConstraint{Name: "ck_users_age", Definition: "(age >= 0)"}); got != "CONSTRAINT \"ck_users_age\" CHECK (age >= 0)" {
+		t.Fatalf("unexpected check constraint: %s", got)
+	}
+	if got := d.GetColumnCommentSQL("users", col); got != "" {
+		t.Fatalf("expected empty column comment sql, got %s", got)
+	}
+	if got := d.GetTableCommentSQL("users", "comment"); got != "" {
+		t.Fatalf("expected empty table comment sql, got %s", got)
+	}
+	if got := d.GetViewCommentSQL("v_users", "comment"); got != "" {
+		t.Fatalf("expected empty view comment sql, got %s", got)
+	}
+	if d.SupportsInlineComment() {
+		t.Fatal("sqlite should not support inline comment")
+	}
+	if !d.SupportsInlineCheck() {
+		t.Fatal("sqlite should support inline check")
 	}
 }

@@ -7,6 +7,7 @@
 //   - sqlserver: Microsoft SQL Server Inspector
 //   - mysql: MySQL 数据库 Inspector
 //   - postgres: PostgreSQL 数据库 Inspector
+//   - sqlite: SQLite 数据库 Inspector
 //
 // 核心组件:
 //   - BaseInspector: Inspector 接口的基础实现，提供连接管理、配置访问等公共功能

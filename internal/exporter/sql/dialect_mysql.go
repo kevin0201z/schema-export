@@ -173,3 +173,7 @@ func (d *MySQLDialect) SupportsInlineComment() bool {
 func (d *MySQLDialect) SupportsInlineCheck() bool {
 	return true
 }
+
+func (d *MySQLDialect) EmitPrimaryKeyInline() bool {
+	return true
+}

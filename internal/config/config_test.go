@@ -108,6 +108,26 @@ func TestValidate(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			name: "valid sqlite config with dsn",
+			config: &Config{
+				Database: DatabaseConfig{
+					Type: "sqlite",
+					DSN:  ":memory:",
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "valid sqlite config with database path",
+			config: &Config{
+				Database: DatabaseConfig{
+					Type:     "sqlite",
+					Database: "./sample.db",
+				},
+			},
+			wantErr: false,
+		},
+		{
 			name: "missing type",
 			config: &Config{
 				Database: DatabaseConfig{
@@ -135,6 +155,15 @@ func TestValidate(t *testing.T) {
 			},
 			wantErr: true,
 		},
+		{
+			name: "sqlite missing path",
+			config: &Config{
+				Database: DatabaseConfig{
+					Type: "sqlite",
+				},
+			},
+			wantErr: true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -144,6 +173,25 @@ func TestValidate(t *testing.T) {
 				t.Errorf("Validate() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
+	}
+}
+
+func TestValidateSQLiteIgnoresHostAndUsername(t *testing.T) {
+	cfg := &Config{
+		Database: DatabaseConfig{
+			Type: "sqlite",
+			DSN:  ":memory:",
+		},
+	}
+
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("Validate() failed: %v", err)
+	}
+	if cfg.Export.OutputDir != "./output" {
+		t.Fatalf("OutputDir default = %q", cfg.Export.OutputDir)
+	}
+	if len(cfg.Export.Formats) != 1 || cfg.Export.Formats[0] != "markdown" {
+		t.Fatalf("Formats default = %v", cfg.Export.Formats)
 	}
 }
 

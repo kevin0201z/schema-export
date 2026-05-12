@@ -113,3 +113,7 @@ func (d *GenericDialect) SupportsInlineComment() bool {
 func (d *GenericDialect) SupportsInlineCheck() bool {
 	return true
 }
+
+func (d *GenericDialect) EmitPrimaryKeyInline() bool {
+	return true
+}

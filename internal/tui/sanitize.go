@@ -67,38 +67,47 @@ func sanitizeDSNFallback(dsn string) string {
 // SanitizeSummary 构建确认页的脱敏摘要。
 func (s *TuiState) SanitizeSummary() string {
 	var b strings.Builder
+	s.normalizeContentOptionsForDBType()
 
 	b.WriteString(fmt.Sprintf("数据库类型: %s\n", s.DBType))
 
 	if s.ConnectionMethod == ConnectionMethodDSN {
 		b.WriteString("连接方式: DSN\n")
 		b.WriteString(fmt.Sprintf("DSN: %s\n", SanitizeDSN(s.DSN)))
-		if s.Schema != "" {
+		if s.Schema != "" && !strings.EqualFold(strings.TrimSpace(s.DBType), "sqlite") {
 			b.WriteString(fmt.Sprintf("Schema: %s\n", s.Schema))
 		}
 	} else {
 		b.WriteString("连接方式: 分离参数\n")
-		b.WriteString(fmt.Sprintf("主机: %s\n", s.Host))
-		if s.Port != "" {
-			b.WriteString(fmt.Sprintf("端口: %s\n", s.Port))
-		}
-		if s.Database != "" {
-			b.WriteString(fmt.Sprintf("数据库: %s\n", s.Database))
-		}
-		b.WriteString(fmt.Sprintf("用户名: %s\n", s.Username))
-		b.WriteString("密码: ******\n")
-		if s.Schema != "" {
-			b.WriteString(fmt.Sprintf("Schema: %s\n", s.Schema))
+		if strings.EqualFold(strings.TrimSpace(s.DBType), "sqlite") {
+			if s.Database != "" {
+				b.WriteString(fmt.Sprintf("数据库文件: %s\n", s.Database))
+			}
+		} else {
+			b.WriteString(fmt.Sprintf("主机: %s\n", s.Host))
+			if s.Port != "" {
+				b.WriteString(fmt.Sprintf("端口: %s\n", s.Port))
+			}
+			if s.Database != "" {
+				b.WriteString(fmt.Sprintf("数据库: %s\n", s.Database))
+			}
+			b.WriteString(fmt.Sprintf("用户名: %s\n", s.Username))
+			b.WriteString("密码: ******\n")
+			if s.Schema != "" {
+				b.WriteString(fmt.Sprintf("Schema: %s\n", s.Schema))
+			}
 		}
 	}
 
 	b.WriteString("\n导出内容:\n")
 	b.WriteString("  表: 是\n")
 	b.WriteString(fmt.Sprintf("  视图: %s\n", boolToYesNo(s.IncludeViews)))
-	b.WriteString(fmt.Sprintf("  存储过程: %s\n", boolToYesNo(s.IncludeProcedures)))
-	b.WriteString(fmt.Sprintf("  函数: %s\n", boolToYesNo(s.IncludeFunctions)))
 	b.WriteString(fmt.Sprintf("  触发器: %s\n", boolToYesNo(s.IncludeTriggers)))
-	b.WriteString(fmt.Sprintf("  序列: %s\n", boolToYesNo(s.IncludeSequences)))
+	if !isSQLiteDBType(s.DBType) {
+		b.WriteString(fmt.Sprintf("  存储过程: %s\n", boolToYesNo(s.IncludeProcedures)))
+		b.WriteString(fmt.Sprintf("  函数: %s\n", boolToYesNo(s.IncludeFunctions)))
+		b.WriteString(fmt.Sprintf("  序列: %s\n", boolToYesNo(s.IncludeSequences)))
+	}
 
 	if s.Tables != "" || s.Exclude != "" || s.Patterns != "" {
 		b.WriteString("\n表过滤:\n")

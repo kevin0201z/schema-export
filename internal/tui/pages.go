@@ -6,6 +6,10 @@ import (
 	"strings"
 )
 
+func isSQLiteDBType(dbType string) bool {
+	return strings.EqualFold(strings.TrimSpace(dbType), "sqlite")
+}
+
 // --- 欢迎页 ---
 
 func (m model) welcomeView() string {
@@ -46,17 +50,23 @@ func (m model) connMethodView() string {
 func (m model) dsnFormView() string {
 	s := styles.Title.Render("DSN 连接配置")
 	s += "\n\n"
-	s += "DSN 连接字符串:\n"
+	if isSQLiteDBType(m.state.DBType) {
+		s += "SQLite 路径或 URI:\n"
+	} else {
+		s += "DSN 连接字符串:\n"
+	}
 	s += m.dsnInput.View()
 	s += "\n\n"
-	s += "Schema（可选）:\n"
-	s += m.schemaInput.View()
-	s += "\n\n"
+	if !isSQLiteDBType(m.state.DBType) {
+		s += "Schema（可选）:\n"
+		s += m.schemaInput.View()
+		s += "\n\n"
+	}
 	if m.pageError != "" {
 		s += styles.Error.Render(m.pageError) + "\n\n"
 	}
 	// 显示焦点提示
-	s += styles.Hint.Render(focusHint(m.focusedInput, 2))
+	s += styles.Hint.Render(focusHint(m.focusedInput, dsnFieldCount(m.state.DBType)))
 	return s
 }
 
@@ -66,17 +76,7 @@ func (m model) paramsFormView() string {
 	s := styles.Title.Render("分离参数连接配置")
 	s += "\n"
 
-	fields := []struct {
-		label string
-		input *textinputAdapter
-	}{
-		{"主机地址 (Host)", &textinputAdapter{m.hostInput}},
-		{"端口 (Port)", &textinputAdapter{m.portInput}},
-		{"数据库名 (Database)", &textinputAdapter{m.dbNameInput}},
-		{"用户名 (Username)", &textinputAdapter{m.usernameInput}},
-		{"密码 (Password)", &textinputAdapter{m.passwordInput}},
-		{"Schema（可选）", &textinputAdapter{m.schemaInput}},
-	}
+	fields := m.paramsFields()
 
 	for i, f := range fields {
 		prefix := "  "
@@ -93,6 +93,32 @@ func (m model) paramsFormView() string {
 	}
 	s += styles.Hint.Render(focusHint(m.focusedInput, len(fields)))
 	return s
+}
+
+func (m model) paramsFields() []struct {
+	label string
+	input *textinputAdapter
+} {
+	if isSQLiteDBType(m.state.DBType) {
+		return []struct {
+			label string
+			input *textinputAdapter
+		}{
+			{"数据库文件路径 (Database)", &textinputAdapter{m.dbNameInput}},
+		}
+	}
+
+	return []struct {
+		label string
+		input *textinputAdapter
+	}{
+		{"主机地址 (Host)", &textinputAdapter{m.hostInput}},
+		{"端口 (Port)", &textinputAdapter{m.portInput}},
+		{"数据库名 (Database)", &textinputAdapter{m.dbNameInput}},
+		{"用户名 (Username)", &textinputAdapter{m.usernameInput}},
+		{"密码 (Password)", &textinputAdapter{m.passwordInput}},
+		{"Schema（可选）", &textinputAdapter{m.schemaInput}},
+	}
 }
 
 // textinputAdapter 包装 textinput.Model 以便统一引用。
@@ -248,16 +274,22 @@ func (m model) validateCurrentPage() error {
 			return errors.New(errMsgEmptyDSN)
 		}
 	case PageParamsForm:
-		if strings.TrimSpace(m.hostInput.Value()) == "" {
-			return errors.New(errMsgEmptyHost)
-		}
-		if strings.TrimSpace(m.usernameInput.Value()) == "" {
-			return errors.New(errMsgEmptyUser)
-		}
-		if port := strings.TrimSpace(m.portInput.Value()); port != "" {
-			p, err := parsePort(port)
-			if err != nil || p < 1 || p > 65535 {
-				return errors.New(errMsgInvalidPort)
+		if isSQLiteDBType(m.state.DBType) {
+			if strings.TrimSpace(m.dbNameInput.Value()) == "" {
+				return errors.New("SQLite 数据库文件路径不能为空")
+			}
+		} else {
+			if strings.TrimSpace(m.hostInput.Value()) == "" {
+				return errors.New(errMsgEmptyHost)
+			}
+			if strings.TrimSpace(m.usernameInput.Value()) == "" {
+				return errors.New(errMsgEmptyUser)
+			}
+			if port := strings.TrimSpace(m.portInput.Value()); port != "" {
+				p, err := parsePort(port)
+				if err != nil || p < 1 || p > 65535 {
+					return errors.New(errMsgInvalidPort)
+				}
 			}
 		}
 	case PageOutputSettings:
@@ -306,4 +338,11 @@ func pageInputCount(p Page) int {
 	default:
 		return 0
 	}
+}
+
+func dsnFieldCount(dbType string) int {
+	if isSQLiteDBType(dbType) {
+		return 1
+	}
+	return 2
 }

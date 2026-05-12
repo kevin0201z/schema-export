@@ -160,3 +160,7 @@ func (d *SQLServerDialect) SupportsInlineComment() bool {
 func (d *SQLServerDialect) SupportsInlineCheck() bool {
 	return true
 }
+
+func (d *SQLServerDialect) EmitPrimaryKeyInline() bool {
+	return true
+}

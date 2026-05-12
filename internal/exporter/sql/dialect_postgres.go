@@ -173,3 +173,7 @@ func (d *PostgreSQLDialect) SupportsInlineComment() bool {
 func (d *PostgreSQLDialect) SupportsInlineCheck() bool {
 	return true
 }
+
+func (d *PostgreSQLDialect) EmitPrimaryKeyInline() bool {
+	return true
+}

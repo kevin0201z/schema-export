@@ -221,3 +221,30 @@ func TestSanitizeSummary_AllContentTypes(t *testing.T) {
 		}
 	}
 }
+
+func TestSanitizeSummary_SQLiteOmitsUnsupportedContentTypes(t *testing.T) {
+	s := &TuiState{
+		DBType:            "sqlite",
+		ConnectionMethod:  ConnectionMethodDSN,
+		DSN:               "./app.db",
+		IncludeViews:      true,
+		IncludeProcedures: true,
+		IncludeFunctions:  true,
+		IncludeTriggers:   true,
+		IncludeSequences:  true,
+		Formats:           []string{"markdown"},
+	}
+
+	summary := s.SanitizeSummary()
+
+	for _, want := range []string{"视图: 是", "触发器: 是"} {
+		if !strings.Contains(summary, want) {
+			t.Fatalf("summary should contain %q", want)
+		}
+	}
+	for _, unwanted := range []string{"存储过程:", "函数:", "序列:"} {
+		if strings.Contains(summary, unwanted) {
+			t.Fatalf("sqlite summary should omit %q, got: %s", unwanted, summary)
+		}
+	}
+}

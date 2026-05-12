@@ -138,6 +138,7 @@ func defaultTuiState() TuiState {
 	}
 
 	s.ConnectionMethod = ConnectionMethodDSN
+	s.normalizeContentOptionsForDBType()
 	return s
 }
 
@@ -197,6 +198,7 @@ func newFormatCheckboxes(selected []string) checkboxModel {
 
 // newContentCheckboxes 创建导出内容多选组件。
 func newContentCheckboxes(s TuiState) checkboxModel {
+	s.normalizeContentOptionsForDBType()
 	selMap := map[string]bool{
 		"views":      s.IncludeViews,
 		"procedures": s.IncludeProcedures,
@@ -204,8 +206,9 @@ func newContentCheckboxes(s TuiState) checkboxModel {
 		"triggers":   s.IncludeTriggers,
 		"sequences":  s.IncludeSequences,
 	}
-	items := make([]checkboxItem, len(contentOptions))
-	for i, opt := range contentOptions {
+	options := contentOptionsForDBType(s.DBType)
+	items := make([]checkboxItem, len(options))
+	for i, opt := range options {
 		items[i] = checkboxItem{
 			title:    opt.label,
 			selected: selMap[opt.key],

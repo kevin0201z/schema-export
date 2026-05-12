@@ -1,6 +1,8 @@
 package sql
 
 import (
+	"context"
+	"database/sql"
 	"os"
 	"path/filepath"
 	"strings"
@@ -8,6 +10,7 @@ import (
 
 	"github.com/schema-export/schema-export/internal/exporter"
 	"github.com/schema-export/schema-export/internal/model"
+	_ "modernc.org/sqlite"
 )
 
 func sampleSQLExportData() ([]model.Table, []model.View, []model.Procedure, []model.Function, []model.Trigger, []model.Sequence) {
@@ -194,5 +197,74 @@ func TestSQLExportEmptyCollectionSummary(t *testing.T) {
 		if !strings.Contains(content, want) {
 			t.Fatalf("expected empty SQL output to contain %q", want)
 		}
+	}
+}
+
+func TestSQLiteExportProducesReplayableSQL(t *testing.T) {
+	outDir := t.TempDir()
+	tables := []model.Table{
+		{
+			Name: "roles",
+			Type: model.TableTypeTable,
+			Columns: []model.Column{
+				{Name: "id", DataType: "INTEGER", IsPrimaryKey: true, IsNullable: false},
+				{Name: "name", DataType: "TEXT", IsNullable: false},
+			},
+		},
+		{
+			Name: "users",
+			Type: model.TableTypeTable,
+			Columns: []model.Column{
+				{Name: "id", DataType: "INTEGER", IsPrimaryKey: true, IsAutoIncrement: true, IsNullable: false},
+				{Name: "role_id", DataType: "INTEGER", IsNullable: false},
+				{Name: "name", DataType: "TEXT", IsNullable: false, CheckConstraint: "length(name) > 0"},
+			},
+			ForeignKeys: []model.ForeignKey{
+				{Name: "fk_users_role", Column: "role_id", RefTable: "roles", RefColumn: "id", OnDelete: "CASCADE"},
+			},
+		},
+	}
+	views := []model.View{{Name: "active_users", Definition: `CREATE VIEW "active_users" AS SELECT id, name FROM users`}}
+
+	exp := NewExporterWithDialect("sqlite")
+	err := exp.Export(tables, views, nil, nil, nil, nil, exporter.ExportOptions{
+		OutputDir:    outDir,
+		SplitFiles:   false,
+		DbType:       "sqlite",
+		IncludeViews: true,
+	})
+	if err != nil {
+		t.Fatalf("Export() failed: %v", err)
+	}
+
+	content := mustReadFile(t, filepath.Join(outDir, "schema.sql"))
+	for _, want := range []string{
+		`"id" INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL`,
+		`CONSTRAINT "fk_users_role" FOREIGN KEY ("role_id") REFERENCES "roles"("id") ON DELETE CASCADE`,
+		`CREATE VIEW "active_users" AS`,
+	} {
+		if !strings.Contains(content, want) {
+			t.Fatalf("expected SQLite SQL output to contain %q", want)
+		}
+	}
+	for _, unwanted := range []string{
+		`ALTER TABLE "users" ADD CONSTRAINT`,
+		`CREATE OR REPLACE VIEW "active_users" AS`,
+		`CREATE VIEW "active_users" AS
+CREATE VIEW "active_users" AS`,
+	} {
+		if strings.Contains(content, unwanted) {
+			t.Fatalf("expected SQLite SQL output to avoid %q", unwanted)
+		}
+	}
+
+	db, err := sql.Open("sqlite", filepath.Join(t.TempDir(), "replay.db"))
+	if err != nil {
+		t.Fatalf("sql.Open() failed: %v", err)
+	}
+	defer db.Close()
+
+	if _, err := db.ExecContext(context.Background(), content); err != nil {
+		t.Fatalf("generated SQLite SQL should be replayable: %v\nSQL:\n%s", err, content)
 	}
 }

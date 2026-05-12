@@ -13,6 +13,7 @@ import (
 	_ "github.com/schema-export/schema-export/internal/database/mysql"
 	_ "github.com/schema-export/schema-export/internal/database/oracle"
 	_ "github.com/schema-export/schema-export/internal/database/postgres"
+	_ "github.com/schema-export/schema-export/internal/database/sqlite"
 	_ "github.com/schema-export/schema-export/internal/database/sqlserver"
 
 	// 导入导出器注册
@@ -41,7 +42,7 @@ func newRootCmd() *cobra.Command {
 	rootCmd := &cobra.Command{
 		Use:   "schema-export",
 		Short: "Database schema export tool",
-		Long: `A cross-database schema export tool that supports DM, Oracle, SQL Server, MySQL, and PostgreSQL.
+		Long: `A cross-database schema export tool that supports DM, Oracle, SQL Server, MySQL, PostgreSQL, and SQLite.
 		
 Generate database structure documentation in Markdown and SQL DDL formats.`,
 		Version: fmt.Sprintf("%s (commit: %s, built: %s)", version, commit, date),
@@ -67,13 +68,13 @@ func newExportCmd() *cobra.Command {
 	}
 
 	// 数据库连接参数
-	exportCmd.Flags().StringVar(&cmd.Config.Database.Type, "type", "dm", "Database type (dm, oracle, sqlserver, mysql, postgres)")
+	exportCmd.Flags().StringVar(&cmd.Config.Database.Type, "type", "dm", "Database type (dm, oracle, sqlserver, mysql, postgres, sqlite)")
 	exportCmd.Flags().StringVar(&cmd.Config.Database.Host, "host", "", "Database host")
 	exportCmd.Flags().IntVar(&cmd.Config.Database.Port, "port", 0, "Database port")
-	exportCmd.Flags().StringVar(&cmd.Config.Database.Database, "database", "", "Database name")
+	exportCmd.Flags().StringVar(&cmd.Config.Database.Database, "database", "", "Database name (or SQLite file path)")
 	exportCmd.Flags().StringVar(&cmd.Config.Database.Username, "username", "", "Database username")
 	exportCmd.Flags().StringVar(&cmd.Config.Database.Password, "password", "", "Database password")
-	exportCmd.Flags().StringVar(&cmd.Config.Database.DSN, "dsn", "", "Database DSN connection string")
+	exportCmd.Flags().StringVar(&cmd.Config.Database.DSN, "dsn", "", "Database DSN connection string (for SQLite: file path, URI, or :memory:)")
 	exportCmd.Flags().StringVar(&cmd.Config.Database.Schema, "schema", "", "Database schema")
 
 	// 导出参数

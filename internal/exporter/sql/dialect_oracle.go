@@ -148,3 +148,7 @@ func (d *OracleDialect) SupportsInlineComment() bool {
 func (d *OracleDialect) SupportsInlineCheck() bool {
 	return true
 }
+
+func (d *OracleDialect) EmitPrimaryKeyInline() bool {
+	return true
+}

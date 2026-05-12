@@ -110,6 +110,7 @@ func initialModel() model {
 
 	// 默认 DSN 模式第一个输入获得焦点
 	m.dsnInput.Focus()
+	m.applyDBTypeHints()
 
 	return m
 }
@@ -378,6 +379,8 @@ func (m *model) syncStateFromInputs() {
 	// 复选框
 	m.state.applyContentCheckboxes(m.contentCheckboxes)
 	m.state.applyFormatCheckboxes(m.formatCheckboxes)
+	m.contentCheckboxes = newContentCheckboxes(m.state)
+	m.applyDBTypeHints()
 }
 
 // startExport 启动导出（在 goroutine 中执行）。
@@ -403,7 +406,7 @@ func (m *model) resetExportState() {
 
 // nextFocus 切换到下一个输入字段。
 func (m *model) nextFocus() {
-	count := pageInputCount(m.currentPage)
+	count := m.currentInputCount()
 	if count <= 1 {
 		return
 	}
@@ -415,7 +418,7 @@ func (m *model) nextFocus() {
 
 // prevFocus 切换到上一个输入字段。
 func (m *model) prevFocus() {
-	count := pageInputCount(m.currentPage)
+	count := m.currentInputCount()
 	if count <= 1 {
 		return
 	}
@@ -432,13 +435,18 @@ func (m *model) focusCurrentField() tea.Cmd {
 	var cmd tea.Cmd
 	switch m.currentPage {
 	case PageDSNForm:
-		if m.focusedInput == 0 {
-			cmd = m.dsnInput.Focus()
-		} else {
-			cmd = m.schemaInput.Focus()
+		inputs := []*textinput.Model{&m.dsnInput}
+		if !strings.EqualFold(strings.TrimSpace(m.state.DBType), "sqlite") {
+			inputs = append(inputs, &m.schemaInput)
+		}
+		if m.focusedInput >= 0 && m.focusedInput < len(inputs) {
+			cmd = inputs[m.focusedInput].Focus()
 		}
 	case PageParamsForm:
 		inputs := []*textinput.Model{&m.hostInput, &m.portInput, &m.dbNameInput, &m.usernameInput, &m.passwordInput, &m.schemaInput}
+		if strings.EqualFold(strings.TrimSpace(m.state.DBType), "sqlite") {
+			inputs = []*textinput.Model{&m.dbNameInput}
+		}
 		if m.focusedInput >= 0 && m.focusedInput < len(inputs) {
 			cmd = inputs[m.focusedInput].Focus()
 		}
@@ -471,7 +479,37 @@ func (m *model) blurAllInputs() {
 	m.outputDirInput.Blur()
 }
 
+func (m *model) applyDBTypeHints() {
+	if strings.EqualFold(strings.TrimSpace(m.state.DBType), "sqlite") {
+		m.dsnInput.Placeholder = "例如: ./app.db、file:app.db?mode=ro 或 :memory:"
+		m.dbNameInput.Placeholder = "SQLite 文件路径，例如: ./app.db"
+		m.hostInput.Placeholder = "SQLite 无需主机地址"
+		m.portInput.Placeholder = "SQLite 无需端口"
+		m.usernameInput.Placeholder = "SQLite 无需用户名"
+		m.passwordInput.Placeholder = "SQLite 无需密码"
+		return
+	}
+
+	m.dsnInput.Placeholder = "例如: dm://user:password@host:5236"
+	m.dbNameInput.Placeholder = "数据库名称"
+	m.hostInput.Placeholder = "例如: localhost"
+	m.portInput.Placeholder = fmt.Sprintf("例如: %d", defaultPortForDBType(m.state.DBType))
+	m.usernameInput.Placeholder = "用户名"
+	m.passwordInput.Placeholder = "密码"
+}
+
 // parsePort 解析端口字符串。
 func parsePort(s string) (int, error) {
 	return strconv.Atoi(strings.TrimSpace(s))
+}
+
+func (m *model) currentInputCount() int {
+	switch m.currentPage {
+	case PageDSNForm:
+		return dsnFieldCount(m.state.DBType)
+	case PageParamsForm:
+		return len(m.paramsFields())
+	default:
+		return pageInputCount(m.currentPage)
+	}
 }

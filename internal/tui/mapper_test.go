@@ -123,6 +123,7 @@ func TestToConfig_PortConversion(t *testing.T) {
 		{name: "zero port", dbType: "mysql", portStr: "0", expected: 0},
 		{name: "empty mysql port uses mysql default", dbType: "mysql", portStr: "", expected: 3306},
 		{name: "empty postgres port uses postgres default", dbType: "postgres", portStr: "", expected: 5432},
+		{name: "empty sqlite port stays zero", dbType: "sqlite", portStr: "", expected: 0},
 		{name: "empty sqlserver port uses sqlserver default", dbType: "sqlserver", portStr: "", expected: 1433},
 		{name: "invalid port falls back to db default", dbType: "mysql", portStr: "abc", expected: 3306},
 		{name: "large numeric port is preserved", dbType: "mysql", portStr: "99999", expected: 99999},
@@ -140,6 +141,37 @@ func TestToConfig_PortConversion(t *testing.T) {
 		if cfg.Database.Port != tt.expected {
 			t.Fatalf("%s: Port(%q): got %d, want %d", tt.name, tt.portStr, cfg.Database.Port, tt.expected)
 		}
+	}
+}
+
+func TestToConfig_SQLiteParamsMode(t *testing.T) {
+	s := TuiState{
+		DBType:           "sqlite",
+		ConnectionMethod: ConnectionMethodParams,
+		Database:         "./app.db",
+		Host:             "should-clear",
+		Port:             "9999",
+		Username:         "should-clear",
+		Password:         "should-clear",
+		IncludeViews:     true,
+		IncludeFunctions: true,
+		IncludeSequences: true,
+		IncludeTriggers:  true,
+	}
+
+	cfg := s.ToConfig()
+
+	if cfg.Database.Database != "./app.db" {
+		t.Fatalf("Database: got %q", cfg.Database.Database)
+	}
+	if cfg.Database.Host != "" || cfg.Database.Port != 0 || cfg.Database.Username != "" || cfg.Database.Password != "" {
+		t.Fatalf("sqlite params should clear non-applicable fields: %+v", cfg.Database)
+	}
+	if !cfg.Export.IncludeViews || !cfg.Export.IncludeTriggers {
+		t.Fatalf("sqlite export flags lost: %+v", cfg.Export)
+	}
+	if cfg.Export.IncludeProcedures || cfg.Export.IncludeFunctions || cfg.Export.IncludeSequences {
+		t.Fatalf("sqlite should clear unsupported export options: %+v", cfg.Export)
 	}
 }
 
@@ -300,6 +332,37 @@ func TestApplyContentCheckboxes(t *testing.T) {
 	}
 	if !s.IncludeSequences {
 		t.Fatal("IncludeSequences should be true")
+	}
+}
+
+func TestApplyContentCheckboxes_SQLiteClearsUnsupportedOptions(t *testing.T) {
+	s := &TuiState{DBType: "sqlite"}
+	cb := checkboxModel{
+		items: []checkboxItem{
+			{key: "views", selected: true},
+			{key: "procedures", selected: true},
+			{key: "functions", selected: true},
+			{key: "triggers", selected: true},
+			{key: "sequences", selected: true},
+		},
+	}
+	s.applyContentCheckboxes(cb)
+
+	if !s.IncludeViews || !s.IncludeTriggers {
+		t.Fatalf("sqlite should preserve supported options: %+v", s)
+	}
+	if s.IncludeProcedures || s.IncludeFunctions || s.IncludeSequences {
+		t.Fatalf("sqlite should clear unsupported options: %+v", s)
+	}
+}
+
+func TestContentOptionsForSQLite(t *testing.T) {
+	options := contentOptionsForDBType("sqlite")
+	if len(options) != 2 {
+		t.Fatalf("sqlite content options count: got %d, want 2", len(options))
+	}
+	if options[0].key != "views" || options[1].key != "triggers" {
+		t.Fatalf("unexpected sqlite content options: %+v", options)
 	}
 }
 

@@ -36,4 +36,8 @@ type Dialect interface {
 
 	// SupportsInlineCheck 是否支持内联 CHECK 约束
 	SupportsInlineCheck() bool
+
+	// EmitPrimaryKeyInline 是否在字段定义中直接输出 PRIMARY KEY。
+	// SQLite 对复合主键需要表级约束，因此返回 false。
+	EmitPrimaryKeyInline() bool
 }

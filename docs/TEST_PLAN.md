@@ -108,6 +108,33 @@
 
 当前状态：已完成
 
+## 阶段八：SQLite Inspector 与方言支持
+
+目标文件：
+
+- `internal/database/sqlite/inspector_test.go`
+- `internal/exporter/sql/dialect_test.go`
+- `internal/config/config_test.go`
+- `internal/tui/mapper_test.go`
+
+重点覆盖：
+
+- `BuildDSN()` 文件路径、URI、`:memory:` 与 `Database` fallback
+- `Config.Validate()` 在 SQLite 下允许只提供 `DSN` 或 `Database`
+- `GetTables()` 排除 `sqlite_%` 系统表
+- `GetTable()` 聚合字段、索引、外键、CHECK
+- `GetColumns()` 识别主键、自增、默认值、列级 CHECK
+- `GetIndexes()` 识别唯一/复合索引并过滤自动索引
+- `GetForeignKeys()` 识别单字段与复合外键
+- `GetCheckConstraints()` 提取表级 CHECK
+- `GetViews()` 与视图定义/字段
+- `GetTriggers()` 与触发时机/事件
+- `GetProcedures()`、`GetFunctions()`、`GetSequences()` 空集合行为
+- SQLite SQL 方言双引号引用、默认值保留、注释空实现
+- TUI 在 SQLite 分离参数模式下仅使用数据库文件路径
+
+当前状态：已完成
+
 ## 阶段二：CLI 命令测试
 
 目标文件：

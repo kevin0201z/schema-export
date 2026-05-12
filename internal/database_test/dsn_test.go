@@ -5,6 +5,7 @@ import (
 
 	"github.com/schema-export/schema-export/internal/database/dm"
 	"github.com/schema-export/schema-export/internal/database/oracle"
+	"github.com/schema-export/schema-export/internal/database/sqlite"
 	"github.com/schema-export/schema-export/internal/inspector"
 )
 
@@ -46,5 +47,19 @@ func TestDMBuildDSN(t *testing.T) {
 	ins3 := dm.NewInspector(cfg3)
 	if got := ins3.BuildDSN(); got == "" {
 		t.Fatalf("expected non-empty DM DSN from components")
+	}
+}
+
+func TestSQLiteBuildDSN(t *testing.T) {
+	cfg := inspector.ConnectionConfig{DSN: ":memory:"}
+	ins := sqlite.NewInspector(cfg)
+	if got := ins.BuildDSN(); got != ":memory:" {
+		t.Fatalf("expected :memory: got %s", got)
+	}
+
+	cfg2 := inspector.ConnectionConfig{Database: "/tmp/example.db"}
+	ins2 := sqlite.NewInspector(cfg2)
+	if got := ins2.BuildDSN(); got != cfg2.Database {
+		t.Fatalf("expected database fallback %s got %s", cfg2.Database, got)
 	}
 }

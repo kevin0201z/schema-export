@@ -18,6 +18,7 @@ import (
 //  6. 调用 Validate 进行规范化和默认值设置
 func (s *TuiState) ToConfig() *config.Config {
 	cfg := config.DefaultConfig()
+	s.normalizeContentOptionsForDBType()
 
 	// 数据库连接
 	cfg.Database.Type = s.DBType
@@ -33,15 +34,22 @@ func (s *TuiState) ToConfig() *config.Config {
 		cfg.Database.Password = ""
 		cfg.Database.Database = ""
 	case ConnectionMethodParams:
-		cfg.Database.Host = s.Host
-		cfg.Database.Username = s.Username
-		cfg.Database.Password = s.Password
-		cfg.Database.Schema = s.Schema
 		cfg.Database.Database = s.Database
-		cfg.Database.Port = defaultPortForDBType(s.DBType)
-		if p := strings.TrimSpace(s.Port); p != "" {
-			if port, err := strconv.Atoi(p); err == nil {
-				cfg.Database.Port = port
+		cfg.Database.Schema = s.Schema
+		if strings.EqualFold(strings.TrimSpace(s.DBType), "sqlite") {
+			cfg.Database.Host = ""
+			cfg.Database.Port = 0
+			cfg.Database.Username = ""
+			cfg.Database.Password = ""
+		} else {
+			cfg.Database.Host = s.Host
+			cfg.Database.Username = s.Username
+			cfg.Database.Password = s.Password
+			cfg.Database.Port = defaultPortForDBType(s.DBType)
+			if p := strings.TrimSpace(s.Port); p != "" {
+				if port, err := strconv.Atoi(p); err == nil {
+					cfg.Database.Port = port
+				}
 			}
 		}
 		// 清空 DSN 字段
@@ -85,6 +93,8 @@ func defaultPortForDBType(dbType string) int {
 		return 3306
 	case "postgres":
 		return 5432
+	case "sqlite":
+		return 0
 	case "dm":
 		fallthrough
 	default:
@@ -111,6 +121,7 @@ func parseCommaSeparated(s string) []string {
 
 // applyContentCheckboxes 将复选框选择应用到 TuiState。
 func (s *TuiState) applyContentCheckboxes(cb checkboxModel) {
+	s.normalizeContentOptionsForDBType()
 	for _, item := range cb.items {
 		switch item.key {
 		case "views":
@@ -125,6 +136,7 @@ func (s *TuiState) applyContentCheckboxes(cb checkboxModel) {
 			s.IncludeSequences = item.selected
 		}
 	}
+	s.normalizeContentOptionsForDBType()
 }
 
 // applyFormatCheckboxes 将格式选择应用到 TuiState。

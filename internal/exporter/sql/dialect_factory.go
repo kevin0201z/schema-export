@@ -11,6 +11,8 @@ func GetDialect(dbType string) Dialect {
 		return &MySQLDialect{}
 	case "postgres", "postgresql":
 		return &PostgreSQLDialect{}
+	case "sqlite":
+		return &SQLiteDialect{}
 	default:
 		return &GenericDialect{}
 	}

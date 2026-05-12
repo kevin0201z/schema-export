@@ -318,9 +318,19 @@ func (e *Exporter) writeTableDDL(file *os.File, table *model.Table) error {
 
 	fmt.Fprintf(file, "CREATE TABLE %s (\n", e.dialect.QuoteIdentifier(table.Name))
 
+	pkColumns := collectPrimaryKeyColumns(table.Columns)
+	inlineSinglePrimaryKey := e.dialect.GetName() == "sqlite" && len(pkColumns) == 1
+	trailingItems := len(table.CheckConstraints)
+	if e.dialect.GetName() == "sqlite" {
+		trailingItems += len(table.ForeignKeys)
+	}
+	if !e.dialect.EmitPrimaryKeyInline() && len(pkColumns) > 0 && !inlineSinglePrimaryKey {
+		trailingItems++
+	}
+
 	for i, col := range table.Columns {
-		colDef := e.dialect.GetColumnDefinition(&col)
-		if i < len(table.Columns)-1 || len(table.CheckConstraints) > 0 {
+		colDef := e.columnDefinitionForTable(&col, inlineSinglePrimaryKey)
+		if i < len(table.Columns)-1 || trailingItems > 0 {
 			fmt.Fprintf(file, "    %s,\n", colDef)
 		} else {
 			fmt.Fprintf(file, "    %s\n", colDef)
@@ -328,11 +338,25 @@ func (e *Exporter) writeTableDDL(file *os.File, table *model.Table) error {
 	}
 
 	for i, cc := range table.CheckConstraints {
-		if i < len(table.CheckConstraints)-1 {
+		if i < len(table.CheckConstraints)-1 || e.sqliteNeedsTrailingItem(table, inlineSinglePrimaryKey) || (!e.dialect.EmitPrimaryKeyInline() && len(pkColumns) > 0 && !inlineSinglePrimaryKey) {
 			fmt.Fprintf(file, "    %s,\n", e.dialect.GetCheckConstraint(&cc))
 		} else {
 			fmt.Fprintf(file, "    %s\n", e.dialect.GetCheckConstraint(&cc))
 		}
+	}
+
+	if e.dialect.GetName() == "sqlite" {
+		for i, fk := range table.ForeignKeys {
+			if i < len(table.ForeignKeys)-1 || (!e.dialect.EmitPrimaryKeyInline() && len(pkColumns) > 0 && !inlineSinglePrimaryKey) {
+				fmt.Fprintf(file, "    %s,\n", e.sqliteInlineForeignKey(&fk))
+			} else {
+				fmt.Fprintf(file, "    %s\n", e.sqliteInlineForeignKey(&fk))
+			}
+		}
+	}
+
+	if !e.dialect.EmitPrimaryKeyInline() && len(pkColumns) > 0 && !inlineSinglePrimaryKey {
+		fmt.Fprintf(file, "    PRIMARY KEY (%s)\n", e.quoteColumns(pkColumns))
 	}
 
 	fmt.Fprintln(file, ");")
@@ -378,7 +402,7 @@ func (e *Exporter) writeTableDDL(file *os.File, table *model.Table) error {
 		}
 	}
 
-	if len(table.ForeignKeys) > 0 {
+	if len(table.ForeignKeys) > 0 && e.dialect.GetName() != "sqlite" {
 		fmt.Fprintln(file, "")
 		fmt.Fprintln(file, "-- --------------------------------------------------------")
 		fmt.Fprintf(file, "-- Foreign Keys for %s\n", table.Name)
@@ -389,11 +413,14 @@ func (e *Exporter) writeTableDDL(file *os.File, table *model.Table) error {
 			fmt.Fprintf(file, "ALTER TABLE %s ADD CONSTRAINT %s FOREIGN KEY (%s) REFERENCES %s(%s)",
 				e.dialect.QuoteIdentifier(table.Name),
 				e.dialect.QuoteIdentifier(fk.Name),
-				e.dialect.QuoteIdentifier(fk.Column),
+				e.quoteFKColumns(fk.Column),
 				e.dialect.QuoteIdentifier(fk.RefTable),
-				e.dialect.QuoteIdentifier(fk.RefColumn))
+				e.quoteFKColumns(fk.RefColumn))
 			if fk.OnDelete != "" {
 				fmt.Fprintf(file, " ON DELETE %s", fk.OnDelete)
+			}
+			if fk.OnUpdate != "" {
+				fmt.Fprintf(file, " ON UPDATE %s", fk.OnUpdate)
 			}
 			fmt.Fprintln(file, ";")
 		}
@@ -411,8 +438,12 @@ func (e *Exporter) writeViewDDL(file *os.File, view *model.View) error {
 	}
 	fmt.Fprintln(file, "")
 
-	fmt.Fprintf(file, "CREATE OR REPLACE VIEW %s AS\n", e.dialect.QuoteIdentifier(view.Name))
-	fmt.Fprintf(file, "%s;\n", view.Definition)
+	if e.dialect.GetName() == "sqlite" {
+		fmt.Fprintln(file, ensureSQLTerminated(view.Definition))
+	} else {
+		fmt.Fprintf(file, "CREATE OR REPLACE VIEW %s AS\n", e.dialect.QuoteIdentifier(view.Name))
+		fmt.Fprintf(file, "%s;\n", view.Definition)
+	}
 
 	if view.Comment != "" {
 		commentSQL := e.dialect.GetViewCommentSQL(view.Name, view.Comment)
@@ -519,6 +550,72 @@ func (e *Exporter) quoteColumns(columns []string) string {
 		quoted[i] = e.dialect.QuoteIdentifier(col)
 	}
 	return strings.Join(quoted, ", ")
+}
+
+func (e *Exporter) columnDefinitionForTable(col *model.Column, inlinePrimaryKey bool) string {
+	if e.dialect.GetName() != "sqlite" {
+		return e.dialect.GetColumnDefinition(col)
+	}
+
+	clone := *col
+	clone.IsPrimaryKey = inlinePrimaryKey && col.IsPrimaryKey
+	return e.dialect.GetColumnDefinition(&clone)
+}
+
+func (e *Exporter) quoteFKColumns(cols string) string {
+	parts := strings.Split(cols, ", ")
+	quoted := make([]string, len(parts))
+	for i, p := range parts {
+		quoted[i] = e.dialect.QuoteIdentifier(strings.TrimSpace(p))
+	}
+	return strings.Join(quoted, ", ")
+}
+
+func (e *Exporter) sqliteInlineForeignKey(fk *model.ForeignKey) string {
+	var b strings.Builder
+	if fk.Name != "" {
+		fmt.Fprintf(&b, "CONSTRAINT %s ", e.dialect.QuoteIdentifier(fk.Name))
+	}
+	fmt.Fprintf(&b, "FOREIGN KEY (%s) REFERENCES %s(%s)",
+		e.quoteFKColumns(fk.Column),
+		e.dialect.QuoteIdentifier(fk.RefTable),
+		e.quoteFKColumns(fk.RefColumn),
+	)
+	if fk.OnDelete != "" {
+		fmt.Fprintf(&b, " ON DELETE %s", fk.OnDelete)
+	}
+	if fk.OnUpdate != "" {
+		fmt.Fprintf(&b, " ON UPDATE %s", fk.OnUpdate)
+	}
+	return b.String()
+}
+
+func (e *Exporter) sqliteNeedsTrailingItem(table *model.Table, inlineSinglePrimaryKey bool) bool {
+	if e.dialect.GetName() != "sqlite" {
+		return false
+	}
+	if len(table.ForeignKeys) > 0 {
+		return true
+	}
+	return !e.dialect.EmitPrimaryKeyInline() && len(collectPrimaryKeyColumns(table.Columns)) > 0 && !inlineSinglePrimaryKey
+}
+
+func ensureSQLTerminated(sqlText string) string {
+	trimmed := strings.TrimSpace(sqlText)
+	if strings.HasSuffix(trimmed, ";") {
+		return trimmed
+	}
+	return trimmed + ";"
+}
+
+func collectPrimaryKeyColumns(columns []model.Column) []string {
+	var pkCols []string
+	for _, col := range columns {
+		if col.IsPrimaryKey {
+			pkCols = append(pkCols, col.Name)
+		}
+	}
+	return pkCols
 }
 
 func (e *Exporter) GetName() string {

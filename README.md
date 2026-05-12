@@ -1,12 +1,12 @@
 # 数据库结构导出工具
 
-一个支持达梦（DM）、Oracle、SQL Server 等数据库结构导出工具。
+一个支持达梦（DM）、Oracle、SQL Server、MySQL、PostgreSQL、SQLite 等数据库结构导出工具。
 
 可生成 Markdown、SQL DDL、JSON、YAML 格式的数据库结构文档。
 
 ## 功能特性
 
-- **多数据库支持**：达梦（DM）、Oracle、SQL Server、MySQL、PostgreSQL
+- **多数据库支持**：达梦（DM）、Oracle、SQL Server、MySQL、PostgreSQL、SQLite
 - **多种导出格式**：Markdown、SQL DDL、JSON、YAML
 - **灵活的导出模式**：单文件或按表分文件导出
 - **数据库对象支持**：表、视图、存储过程、函数、触发器、序列
@@ -90,6 +90,21 @@ GOOS=darwin GOARCH=amd64 go build -o schema-export-darwin ./cmd/schema-export
   --dsn "dm://SYSDBA:password@localhost:5236" \
   --split \
   --output ./docs
+
+# 导出 SQLite 文件
+./schema-export export \
+  --type sqlite \
+  --dsn ./app.db \
+  --formats markdown,sql,json,yaml \
+  --output ./docs
+
+# 使用 --database 传递 SQLite 文件路径
+./schema-export export \
+  --type sqlite \
+  --database ./app.db \
+  --include-views \
+  --include-triggers \
+  --output ./docs
 ```
 
 ### DSN 格式参考
@@ -172,11 +187,27 @@ GOOS=darwin GOARCH=amd64 go build -o schema-export-darwin ./cmd/schema-export
 # 注意：不指定 sslmode 时，工具会自动追加 sslmode=disable
 ```
 
+**SQLite**
+
+```bash
+# 本地文件路径
+--dsn "./app.db"
+
+# URI 形式
+--dsn "file:app.db?mode=ro"
+
+# 内存数据库
+--dsn ":memory:"
+
+# 也可使用分离参数模式，把文件路径填到 --database
+--database "./app.db"
+```
+
 ### 使用环境变量
 
 ```bash
-export DB_TYPE=dm
-export DB_DSN="dm://SYSDBA:password@localhost:5236"
+export DB_TYPE=sqlite
+export DB_DSN="./app.db"
 export EXPORT_OUTPUT=./docs
 export EXPORT_FORMATS=markdown,sql
 export EXPORT_INCLUDE_VIEWS=true
@@ -209,7 +240,7 @@ export EXPORT_INCLUDE_VIEWS=true
 ```
 
 支持功能：
-- 数据库类型选择（dm、oracle、sqlserver、mysql、postgres）
+- 数据库类型选择（dm、oracle、sqlserver、mysql、postgres、sqlite）
 - DSN 和分离参数两种连接方式
 - 导出对象选择（表、视图、存储过程、函数、触发器、序列）
 - 表名过滤（指定表、排除表、正则匹配）
@@ -229,13 +260,13 @@ export EXPORT_INCLUDE_VIEWS=true
 
 | 参数           | 默认值      | 说明                                        |
 | ------------ | -------- | ----------------------------------------- |
-| `--type`     | dm       | 数据库类型（dm、oracle、sqlserver、mysql、postgres） |
+| `--type`     | dm       | 数据库类型（dm、oracle、sqlserver、mysql、postgres、sqlite） |
 | `--host`     | <br />   | 数据库主机                           |
 | `--port`     | 0        | 数据库端口                           |
-| `--database` | <br />   | 数据库名                            |
+| `--database` | <br />   | 数据库名；SQLite 下表示数据库文件路径          |
 | `--username` | <br />   | 数据库用户名                          |
 | `--password` | <br />   | 数据库密码                           |
-| `--dsn`      | <br />   | DSN 连接字符串                       |
+| `--dsn`      | <br />   | DSN 连接字符串；SQLite 下可为文件路径、URI 或 `:memory:` |
 | `--schema`   | <br />   | 数据库 Schema                      |
 | `--output`   | ./output | 输出目录或文件路径                       |
 | `--formats`  | markdown | 导出格式（逗号分隔：markdown,sql,json,yaml）   |

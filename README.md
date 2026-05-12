@@ -120,6 +120,22 @@ export EXPORT_INCLUDE_VIEWS=true
 ./schema-export export --tables users,orders --exclude orders_archive
 ```
 
+## TUI 交互模式
+
+通过交互式向导完成数据库导出，无需记忆命令行参数。
+
+```bash
+./schema-export tui
+```
+
+支持功能：
+- 数据库类型选择（dm、oracle、sqlserver、mysql、postgres）
+- DSN 和分离参数两种连接方式
+- 导出对象选择（表、视图、存储过程、函数、触发器、序列）
+- 表名过滤（指定表、排除表、正则匹配）
+- 多格式导出（markdown、sql、json、yaml）
+- 密码输入隐藏和确认页脱敏展示
+
 ## CLI 参考
 
 ### 全局参数

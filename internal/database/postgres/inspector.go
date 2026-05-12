@@ -57,10 +57,24 @@ func (i *Inspector) BuildDSN() string {
 	if config.DSN != "" {
 		dsn := config.DSN
 		if strings.HasPrefix(dsn, "postgres://") || strings.HasPrefix(dsn, "postgresql://") {
+			if !strings.Contains(dsn, "sslmode=") {
+				if strings.Contains(dsn, "?") {
+					dsn += "&sslmode=disable"
+				} else {
+					dsn += "?sslmode=disable"
+				}
+			}
 			return dsn
 		}
 		if !strings.Contains(dsn, "://") {
 			dsn = "postgres://" + dsn
+		}
+		if !strings.Contains(dsn, "sslmode=") {
+			if strings.Contains(dsn, "?") {
+				dsn += "&sslmode=disable"
+			} else {
+				dsn += "?sslmode=disable"
+			}
 		}
 		return dsn
 	}

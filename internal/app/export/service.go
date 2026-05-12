@@ -3,6 +3,7 @@ package exportapp
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -18,11 +19,18 @@ import (
 // Service 封装导出流程编排。
 type Service struct {
 	Config *config.Config
+	outW   io.Writer
+	errW   io.Writer
 }
 
-// NewService 创建导出服务。
+// NewService 创建导出服务，输出到 os.Stdout/os.Stderr。
 func NewService(cfg *config.Config) *Service {
-	return &Service{Config: cfg}
+	return &Service{Config: cfg, outW: os.Stdout, errW: os.Stderr}
+}
+
+// NewServiceWithWriters 创建导出服务并指定输出 writer。
+func NewServiceWithWriters(cfg *config.Config, outW, errW io.Writer) *Service {
+	return &Service{Config: cfg, outW: outW, errW: errW}
 }
 
 // Run 执行完整导出流程。
@@ -50,14 +58,14 @@ func (s *Service) Run() error {
 		return fmt.Errorf("database connection test failed: %w", err)
 	}
 
-	fmt.Printf("Connected to %s database\n", s.Config.Database.Type)
+	fmt.Fprintf(s.outW, "Connected to %s database\n", s.Config.Database.Type)
 
 	tables, err := ins.GetTables(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get tables: %w", err)
 	}
 
-	fmt.Printf("Found %d tables\n", len(tables))
+	fmt.Fprintf(s.outW, "Found %d tables\n", len(tables))
 
 	tableFilter, err := filter.NewTableFilter(
 		s.Config.Export.Tables,
@@ -69,7 +77,7 @@ func (s *Service) Run() error {
 	}
 
 	tables = tableFilter.FilterTables(tables)
-	fmt.Printf("Filtered to %d tables\n", len(tables))
+	fmt.Fprintf(s.outW, "Filtered to %d tables\n", len(tables))
 
 	fullTables, failedTables, err := s.loadTables(ctx, ins, tables)
 	if err != nil {
@@ -77,22 +85,22 @@ func (s *Service) Run() error {
 	}
 
 	if len(failedTables) > 0 {
-		fmt.Printf("Warning: %d tables failed to process: %v\n", len(failedTables), failedTables)
+		fmt.Fprintf(s.outW, "Warning: %d tables failed to process: %v\n", len(failedTables), failedTables)
 	}
 
 	if len(fullTables) == 0 {
 		return fmt.Errorf("no tables were successfully processed")
 	}
 
-	fmt.Printf("Successfully processed %d tables\n", len(fullTables))
+	fmt.Fprintf(s.outW, "Successfully processed %d tables\n", len(fullTables))
 
 	var views []model.View
 	if s.Config.Export.IncludeViews {
 		views, err = ins.GetViews(ctx)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: failed to get views: %v\n", err)
+			fmt.Fprintf(s.errW, "Warning: failed to get views: %v\n", err)
 		} else {
-			fmt.Printf("Found %d views\n", len(views))
+			fmt.Fprintf(s.outW, "Found %d views\n", len(views))
 		}
 	}
 
@@ -100,9 +108,9 @@ func (s *Service) Run() error {
 	if s.Config.Export.IncludeProcedures {
 		procedures, err = ins.GetProcedures(ctx)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: failed to get procedures: %v\n", err)
+			fmt.Fprintf(s.errW, "Warning: failed to get procedures: %v\n", err)
 		} else {
-			fmt.Printf("Found %d procedures\n", len(procedures))
+			fmt.Fprintf(s.outW, "Found %d procedures\n", len(procedures))
 		}
 	}
 
@@ -110,9 +118,9 @@ func (s *Service) Run() error {
 	if s.Config.Export.IncludeFunctions {
 		functions, err = ins.GetFunctions(ctx)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: failed to get functions: %v\n", err)
+			fmt.Fprintf(s.errW, "Warning: failed to get functions: %v\n", err)
 		} else {
-			fmt.Printf("Found %d functions\n", len(functions))
+			fmt.Fprintf(s.outW, "Found %d functions\n", len(functions))
 		}
 	}
 
@@ -121,21 +129,21 @@ func (s *Service) Run() error {
 		for _, table := range fullTables {
 			tableTriggers, err := ins.GetTriggers(ctx, table.Name)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Warning: failed to get triggers for table %s: %v\n", table.Name, err)
+				fmt.Fprintf(s.errW, "Warning: failed to get triggers for table %s: %v\n", table.Name, err)
 				continue
 			}
 			triggers = append(triggers, tableTriggers...)
 		}
-		fmt.Printf("Found %d triggers\n", len(triggers))
+		fmt.Fprintf(s.outW, "Found %d triggers\n", len(triggers))
 	}
 
 	var sequences []model.Sequence
 	if s.Config.Export.IncludeSequences {
 		sequences, err = ins.GetSequences(ctx)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: failed to get sequences: %v\n", err)
+			fmt.Fprintf(s.errW, "Warning: failed to get sequences: %v\n", err)
 		} else {
-			fmt.Printf("Found %d sequences\n", len(sequences))
+			fmt.Fprintf(s.outW, "Found %d sequences\n", len(sequences))
 		}
 	}
 
@@ -143,7 +151,7 @@ func (s *Service) Run() error {
 		return err
 	}
 
-	fmt.Println("Export completed successfully!")
+	fmt.Fprintln(s.outW, "Export completed successfully!")
 	return nil
 }
 
@@ -160,7 +168,7 @@ func (s *Service) loadTables(ctx context.Context, ins inspector.Inspector, table
 
 		fullTable, err := ins.GetTable(ctx, table.Name)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: failed to get table %s: %v\n", table.Name, err)
+			fmt.Fprintf(s.errW, "Warning: failed to get table %s: %v\n", table.Name, err)
 			failedTables = append(failedTables, table.Name)
 			continue
 		}
@@ -172,12 +180,16 @@ func (s *Service) loadTables(ctx context.Context, ins inspector.Inspector, table
 
 // ExportAllFormats 导出所有格式。
 func (s *Service) ExportAllFormats(tables []model.Table, views []model.View, procedures []model.Procedure, functions []model.Function, triggers []model.Trigger, sequences []model.Sequence) error {
+	if info, err := os.Stat(s.Config.Export.OutputDir); err == nil && !info.IsDir() {
+		return fmt.Errorf("output path %q exists but is a file, not a directory", s.Config.Export.OutputDir)
+	}
+
 	var failed []string
 	successCount := 0
 
 	for _, format := range s.Config.Export.Formats {
 		if err := s.exportFormat(tables, views, procedures, functions, triggers, sequences, format); err != nil {
-			fmt.Fprintf(os.Stderr, "Error exporting to %s: %v\n", format, err)
+			fmt.Fprintf(s.errW, "Error exporting to %s: %v\n", format, err)
 			failed = append(failed, fmt.Sprintf("%s (%v)", format, err))
 			continue
 		}
@@ -223,7 +235,7 @@ func (s *Service) exportFormat(tables []model.Table, views []model.View, procedu
 		return fmt.Errorf("export failed: %w", err)
 	}
 
-	fmt.Printf("Exported to %s format\n", format)
+	fmt.Fprintf(s.outW, "Exported to %s format\n", format)
 	return nil
 }
 

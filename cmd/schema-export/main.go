@@ -5,12 +5,14 @@ import (
 	"os"
 
 	"github.com/schema-export/schema-export/internal/cli"
+	"github.com/schema-export/schema-export/internal/tui"
 	"github.com/spf13/cobra"
 
 	// 导入驱动注册
 	_ "github.com/schema-export/schema-export/internal/database/dm"
 	_ "github.com/schema-export/schema-export/internal/database/mysql"
 	_ "github.com/schema-export/schema-export/internal/database/oracle"
+	_ "github.com/schema-export/schema-export/internal/database/postgres"
 	_ "github.com/schema-export/schema-export/internal/database/sqlserver"
 
 	// 导入导出器注册
@@ -39,7 +41,7 @@ func newRootCmd() *cobra.Command {
 	rootCmd := &cobra.Command{
 		Use:   "schema-export",
 		Short: "Database schema export tool",
-		Long: `A cross-database schema export tool that supports DM, Oracle, SQL Server, and MySQL.
+		Long: `A cross-database schema export tool that supports DM, Oracle, SQL Server, MySQL, and PostgreSQL.
 		
 Generate database structure documentation in Markdown and SQL DDL formats.`,
 		Version: fmt.Sprintf("%s (commit: %s, built: %s)", version, commit, date),
@@ -47,6 +49,7 @@ Generate database structure documentation in Markdown and SQL DDL formats.`,
 
 	rootCmd.AddCommand(newExportCmd())
 	rootCmd.AddCommand(newVersionCmd())
+	rootCmd.AddCommand(newTUICmd())
 
 	return rootCmd
 }
@@ -64,7 +67,7 @@ func newExportCmd() *cobra.Command {
 	}
 
 	// 数据库连接参数
-	exportCmd.Flags().StringVar(&cmd.Config.Database.Type, "type", "dm", "Database type (dm, oracle, sqlserver, mysql)")
+	exportCmd.Flags().StringVar(&cmd.Config.Database.Type, "type", "dm", "Database type (dm, oracle, sqlserver, mysql, postgres)")
 	exportCmd.Flags().StringVar(&cmd.Config.Database.Host, "host", "", "Database host")
 	exportCmd.Flags().IntVar(&cmd.Config.Database.Port, "port", 0, "Database port")
 	exportCmd.Flags().StringVar(&cmd.Config.Database.Database, "database", "", "Database name")
@@ -99,4 +102,8 @@ func newVersionCmd() *cobra.Command {
 			fmt.Printf("  Built:  %s\n", date)
 		},
 	}
+}
+
+func newTUICmd() *cobra.Command {
+	return tui.NewCommand()
 }

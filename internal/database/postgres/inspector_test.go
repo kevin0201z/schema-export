@@ -44,17 +44,17 @@ func TestBuildDSN(t *testing.T) {
 		{
 			name: "passthrough postgres uri",
 			cfg:  inspector.ConnectionConfig{DSN: "postgres://u:p@h:5432/db"},
-			want: "postgres://u:p@h:5432/db",
+			want: "postgres://u:p@h:5432/db?sslmode=disable",
 		},
 		{
 			name: "passthrough postgresql uri",
 			cfg:  inspector.ConnectionConfig{DSN: "postgresql://u:p@h:5432/db"},
-			want: "postgresql://u:p@h:5432/db",
+			want: "postgresql://u:p@h:5432/db?sslmode=disable",
 		},
 		{
 			name: "prefix bare dsn",
 			cfg:  inspector.ConnectionConfig{DSN: "u:p@h:5432/db"},
-			want: "postgres://u:p@h:5432/db",
+			want: "postgres://u:p@h:5432/db?sslmode=disable",
 		},
 		{
 			name: "build from parts with default ssl",
@@ -78,6 +78,16 @@ func TestBuildDSN(t *testing.T) {
 				SSLMode:  "require",
 			},
 			want: "postgres://u:p@h:5432/db?sslmode=require",
+		},
+		{
+			name: "passthrough uri with sslmode already set",
+			cfg:  inspector.ConnectionConfig{DSN: "postgres://u:p@h:5432/db?sslmode=require"},
+			want: "postgres://u:p@h:5432/db?sslmode=require",
+		},
+		{
+			name: "passthrough uri with existing params appends sslmode",
+			cfg:  inspector.ConnectionConfig{DSN: "postgres://u:p@h:5432/db?connect_timeout=10"},
+			want: "postgres://u:p@h:5432/db?connect_timeout=10&sslmode=disable",
 		},
 	}
 

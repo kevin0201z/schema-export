@@ -42,7 +42,7 @@ func (e *Exporter) Export(tables []model.Table, views []model.View, procedures [
 
 func (e *Exporter) exportSingleFile(tables []model.Table, views []model.View, procedures []model.Procedure, functions []model.Function, triggers []model.Trigger, sequences []model.Sequence, options exporter.ExportOptions) error {
 	outputPath := filepath.Join(options.OutputDir, options.FileName)
-	if outputPath == "" || outputPath == options.OutputDir {
+	if options.FileName == "" {
 		outputPath = filepath.Join(options.OutputDir, "schema.md")
 	}
 
@@ -232,6 +232,11 @@ func (e *Exporter) exportSingleFile(tables []model.Table, views []model.View, pr
 
 func (e *Exporter) exportSplitFiles(tables []model.Table, views []model.View, procedures []model.Procedure, functions []model.Function, triggers []model.Trigger, sequences []model.Sequence, options exporter.ExportOptions) error {
 	markdownDir := filepath.Join(options.OutputDir, "markdown")
+
+	if info, err := os.Stat(options.OutputDir); err == nil && !info.IsDir() {
+		return fmt.Errorf("output path %s is a file, not a directory", options.OutputDir)
+	}
+
 	if err := os.MkdirAll(markdownDir, 0755); err != nil {
 		return fmt.Errorf("failed to create markdown directory: %w", err)
 	}

@@ -10,31 +10,34 @@ import (
 func TestPostgresBuildDSN(t *testing.T) {
 	cfg := inspector.ConnectionConfig{DSN: "postgres://u:p@h:5432/db"}
 	ins := postgres.NewInspector(cfg)
-	if got := ins.BuildDSN(); got != cfg.DSN {
-		t.Fatalf("expected %s got %s", cfg.DSN, got)
+	got := ins.BuildDSN()
+	if !contains(got, "postgres://u:p@h:5432/db") || !contains(got, "sslmode=disable") {
+		t.Fatalf("expected DSN to contain postgres://u:p@h:5432/db and sslmode=disable, got %s", got)
 	}
 
 	cfg2 := inspector.ConnectionConfig{DSN: "postgresql://u:p@h:5432/db"}
 	ins2 := postgres.NewInspector(cfg2)
-	if got := ins2.BuildDSN(); got != cfg2.DSN {
-		t.Fatalf("expected %s got %s", cfg2.DSN, got)
+	got2 := ins2.BuildDSN()
+	if !contains(got2, "postgresql://u:p@h:5432/db") || !contains(got2, "sslmode=disable") {
+		t.Fatalf("expected DSN to contain postgresql://u:p@h:5432/db and sslmode=disable, got %s", got2)
 	}
 
 	cfg3 := inspector.ConnectionConfig{DSN: "u:p@h:5432/db"}
 	ins3 := postgres.NewInspector(cfg3)
-	if got := ins3.BuildDSN(); got != "postgres://"+cfg3.DSN {
-		t.Fatalf("expected prefixed DSN, got %s", got)
+	got3 := ins3.BuildDSN()
+	if !contains(got3, "postgres://u:p@h:5432/db") || !contains(got3, "sslmode=disable") {
+		t.Fatalf("expected DSN to contain postgres://u:p@h:5432/db and sslmode=disable, got %s", got3)
 	}
 
 	cfg4 := inspector.ConnectionConfig{Username: "u", Password: "p", Host: "h", Port: 5432, Database: "db"}
 	ins4 := postgres.NewInspector(cfg4)
-	got := ins4.BuildDSN()
-	if got == "" {
+	got4 := ins4.BuildDSN()
+	if got4 == "" {
 		t.Fatalf("expected non-empty DSN built from components")
 	}
 	expectedPrefix := "postgres://u:p@h:5432/db"
-	if len(got) < len(expectedPrefix) || got[:len(expectedPrefix)] != expectedPrefix {
-		t.Fatalf("expected DSN to start with %s, got %s", expectedPrefix, got)
+	if len(got4) < len(expectedPrefix) || got4[:len(expectedPrefix)] != expectedPrefix {
+		t.Fatalf("expected DSN to start with %s, got %s", expectedPrefix, got4)
 	}
 }
 

@@ -39,7 +39,7 @@ func (e *Exporter) Export(tables []model.Table, views []model.View, procedures [
 
 func (e *Exporter) exportSingleFile(tables []model.Table, views []model.View, procedures []model.Procedure, functions []model.Function, triggers []model.Trigger, sequences []model.Sequence, options exporter.ExportOptions) error {
 	outputPath := filepath.Join(options.OutputDir, options.FileName)
-	if outputPath == "" || outputPath == options.OutputDir {
+	if options.FileName == "" {
 		outputPath = filepath.Join(options.OutputDir, "schema.sql")
 	}
 

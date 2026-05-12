@@ -92,6 +92,86 @@ GOOS=darwin GOARCH=amd64 go build -o schema-export-darwin ./cmd/schema-export
   --output ./docs
 ```
 
+### DSN 格式参考
+
+每种数据库的 DSN 连接字符串格式如下：
+
+**达梦（DM）**
+
+```bash
+# 完整格式
+--dsn "dm://user:password@host:port"
+
+# 简化格式（自动补充 dm:// 前缀）
+--dsn "user:password@host:port"
+
+# 示例：带 schema 参数
+--dsn "dm://SYSDBA:password@localhost:5236?schema=SCHEMA_NAME"
+```
+
+**Oracle**
+
+```bash
+# 完整格式
+--dsn "oracle://user:password@host:port/service_name"
+
+# 传统格式（自动补充 oracle:// 前缀）
+--dsn "user/password@host:port/service_name"
+
+# 示例
+--dsn "oracle://scott:tiger@localhost:1521/ORCL"
+
+# 带 schema
+--dsn "oracle://scott:tiger@localhost:1521/ORCL?schema=OTHER_USER"
+```
+
+**SQL Server**
+
+```bash
+# 完整格式
+--dsn "sqlserver://user:password@host:port?database=dbname"
+
+# 简化格式（自动补充 sqlserver:// 前缀）
+--dsn "user:password@host:port?database=dbname"
+
+# 示例
+--dsn "sqlserver://sa:password@localhost:1433?database=mydb"
+```
+
+**MySQL**
+
+```bash
+# 完整格式（推荐）
+--dsn "mysql://user:password@host:port/dbname"
+
+# DSN 原始格式（go-sql-driver 标准格式）
+--dsn "user:password@tcp(host:port)/dbname"
+
+# 示例
+--dsn "mysql://root:password@localhost:3306/mydb"
+
+# 带 SSL
+--dsn "mysql://root:password@localhost:3306/mydb?tls=true"
+```
+
+**PostgreSQL**
+
+```bash
+# postgres:// 格式
+--dsn "postgres://user:password@host:port/dbname"
+
+# postgresql:// 格式（同样支持）
+--dsn "postgresql://user:password@host:port/dbname"
+
+# 示例：本地连接（自动禁 SSL）
+--dsn "postgresql://postgres:password@localhost:5432/mydb"
+
+# 示例：指定 SSL 模式
+--dsn "postgres://user:password@host:5432/dbname?sslmode=require"
+
+# 注意：不指定 sslmode 时，工具会自动追加 sslmode=disable
+```
+
 ### 使用环境变量
 
 ```bash

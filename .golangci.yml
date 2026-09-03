@@ -1,0 +1,26 @@
+# Migrated from v1's default configuration with `golangci-lint migrate`.
+# Preserve the previous checks and standard exclusions during the Go upgrade.
+version: "2"
+linters:
+  settings:
+    staticcheck:
+      # v1 enabled staticcheck and gosimple, not stylecheck or quick fixes.
+      checks: ["all", "-ST*", "-QF*"]
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+formatters:
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$

@@ -32,6 +32,9 @@ func (e *Exporter) Export(tables []model.Table, views []model.View, procedures [
 	}
 
 	if options.SplitFiles {
+		if err := exporter.ValidateSplitFileNames(tables, views, procedures, functions, triggers, sequences, options); err != nil {
+			return err
+		}
 		return e.exportSplitFiles(tables, views, procedures, functions, triggers, sequences, options)
 	}
 	return e.exportSingleFile(tables, views, procedures, functions, triggers, sequences, options)

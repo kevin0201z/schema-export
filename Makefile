@@ -2,6 +2,7 @@
 
 # 变量定义
 BINARY_NAME=schema-export
+.DEFAULT_GOAL := build
 MAIN_PACKAGE=./cmd/schema-export
 BUILD_DIR=build
 VERSION?=dev
@@ -14,9 +15,19 @@ GOBIN=$(GOBASE)/$(BUILD_DIR)
 GOFILES=$(wildcard *.go)
 LDFLAGS=-ldflags "-X main.version=${VERSION} -X main.commit=${COMMIT} -X main.date=${DATE}"
 
+# Apply the deployment target to both C compilation and linking. Including it in
+# CGO flags also prevents reuse of cached objects built for a newer macOS.
+MACOSX_DEPLOYMENT_TARGET?=12.0
+CGO_CFLAGS?=-O2 -g
+CGO_LDFLAGS?=-O2 -g
+DARWIN_ENV=MACOSX_DEPLOYMENT_TARGET="$(MACOSX_DEPLOYMENT_TARGET)" CGO_CFLAGS="$(CGO_CFLAGS) -mmacosx-version-min=$(MACOSX_DEPLOYMENT_TARGET)" CGO_LDFLAGS="$(CGO_LDFLAGS) -mmacosx-version-min=$(MACOSX_DEPLOYMENT_TARGET)"
+ifeq ($(shell uname -s),Darwin)
+BUILD_ENV=$(DARWIN_ENV)
+endif
+
 # 并行构建支持
 .NOTPARALLEL: clean
-MAKEFLAGS += -j$(shell nproc 2>/dev/null || echo 4)
+MAKEFLAGS += -j$(shell getconf _NPROCESSORS_ONLN 2>/dev/null || echo 4)
 
 # 检查工具依赖
 .PHONY: check-go
@@ -48,14 +59,14 @@ all: build
 .PHONY: build
 build: check-deps
 	@echo "Building $(BINARY_NAME)..."
-	@mkdir -p $(BUILD_DIR) || { echo "Failed to create build directory"; exit 1; }
-	go build $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME) $(MAIN_PACKAGE) || { echo "Build failed"; exit 1; }
+	@mkdir -p "$(BUILD_DIR)" || { echo "Failed to create build directory"; exit 1; }
+	$(BUILD_ENV) go build $(LDFLAGS) -o "$(BUILD_DIR)/$(BINARY_NAME)" $(MAIN_PACKAGE) || { echo "Build failed"; exit 1; }
 	@echo "Build complete: $(BUILD_DIR)/$(BINARY_NAME)"
 
 # 安装到 $GOPATH/bin
 .PHONY: install
 install: check-deps
-	go install $(LDFLAGS) $(MAIN_PACKAGE) || { echo "Install failed"; exit 1; }
+	$(BUILD_ENV) go install $(LDFLAGS) $(MAIN_PACKAGE) || { echo "Install failed"; exit 1; }
 
 # 清理构建产物
 .PHONY: clean
@@ -125,12 +136,24 @@ build-windows: check-deps
 	@mkdir -p $(BUILD_DIR) || { echo "Failed to create build directory"; exit 1; }
 	GOOS=windows GOARCH=amd64 go build $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME)-windows-amd64.exe $(MAIN_PACKAGE) || { echo "Windows build failed"; exit 1; }
 
+.PHONY: check-darwin
+check-darwin: check-deps
+	@test "$$(uname -s)" = Darwin || { echo "macOS CGO builds require a Mac with Xcode Command Line Tools; use build-darwin-portable for a build without DM cipher plugins."; exit 1; }
+	@xcrun --find clang >/dev/null || { echo "Install Xcode Command Line Tools with: xcode-select --install"; exit 1; }
+
 .PHONY: build-darwin
-build-darwin: check-deps
+build-darwin: check-darwin
 	@echo "Building for macOS..."
-	@mkdir -p $(BUILD_DIR) || { echo "Failed to create build directory"; exit 1; }
-	GOOS=darwin GOARCH=amd64 go build $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME)-darwin-amd64 $(MAIN_PACKAGE) || { echo "macOS amd64 build failed"; exit 1; }
-	GOOS=darwin GOARCH=arm64 go build $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME)-darwin-arm64 $(MAIN_PACKAGE) || { echo "macOS arm64 build failed"; exit 1; }
+	@mkdir -p "$(BUILD_DIR)" || { echo "Failed to create build directory"; exit 1; }
+	$(DARWIN_ENV) CGO_ENABLED=1 GOOS=darwin GOARCH=amd64 go build $(LDFLAGS) -o "$(BUILD_DIR)/$(BINARY_NAME)-darwin-amd64" $(MAIN_PACKAGE) || { echo "macOS amd64 build failed"; exit 1; }
+	$(DARWIN_ENV) CGO_ENABLED=1 GOOS=darwin GOARCH=arm64 go build $(LDFLAGS) -o "$(BUILD_DIR)/$(BINARY_NAME)-darwin-arm64" $(MAIN_PACKAGE) || { echo "macOS arm64 build failed"; exit 1; }
+
+.PHONY: build-darwin-portable
+build-darwin-portable: check-deps
+	@echo "Building portable macOS binaries (DM third-party cipher plugins unavailable)..."
+	@mkdir -p "$(BUILD_DIR)" || { echo "Failed to create build directory"; exit 1; }
+	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build $(LDFLAGS) -o "$(BUILD_DIR)/$(BINARY_NAME)-darwin-amd64-portable" $(MAIN_PACKAGE)
+	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build $(LDFLAGS) -o "$(BUILD_DIR)/$(BINARY_NAME)-darwin-arm64-portable" $(MAIN_PACKAGE)
 
 # 运行示例
 .PHONY: run
@@ -160,10 +183,11 @@ help:
 	@echo "  make vet          - Run go vet"
 	@echo "  make lint         - Run linter (golangci-lint)"
 	@echo "  make deps         - Download and tidy dependencies"
-	@echo "  make build-all    - Build for all platforms"
+	@echo "  make build-all    - Build all platforms (requires macOS)"
 	@echo "  make build-linux  - Build for Linux"
 	@echo "  make build-windows- Build for Windows"
-	@echo "  make build-darwin - Build for macOS"
+	@echo "  make build-darwin - Build both macOS architectures with CGO (requires macOS)"
+	@echo "  make build-darwin-portable - Cross-build macOS without DM cipher plugins"
 	@echo "  make run          - Build and run"
 	@echo "  make dev          - Run in development mode"
 	@echo "  make version      - Show version"

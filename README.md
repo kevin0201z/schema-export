@@ -28,9 +28,14 @@ SQLite 特别说明：
 
 ### 从源码编译
 
+需要 Go 1.25 或更高版本。macOS 支持目标为 12 或更高版本，支持 Intel 和 Apple Silicon。
+
 ```bash
-go build -o schema-export ./cmd/schema-export
+make build
+./build/schema-export --help
 ```
+
+下文的 `./schema-export` 表示可执行文件路径；使用上述构建时请替换为 `./build/schema-export`。
 
 ### 查看帮助
 
@@ -69,8 +74,12 @@ go build -o schema-export ./cmd/schema-export
 ### 本地构建
 
 ```bash
-go build -o schema-export ./cmd/schema-export
+make build
 ```
+
+macOS 构建需要 Xcode Command Line Tools（`xcode-select --install`）。Makefile 为 C 编译和链接统一设置 macOS 12 部署目标，避免产物只能在构建机的新版系统运行。直接执行 `go build` 不会自动应用这些设置。
+
+需要兼容 macOS 12 时使用已验证的 Go 1.25 / 1.26；升级 Go 大版本后应重新确认其最低系统要求。
 
 ### 跨平台构建
 
@@ -81,9 +90,17 @@ GOOS=linux GOARCH=amd64 go build -o schema-export-linux ./cmd/schema-export
 # Windows
 GOOS=windows GOARCH=amd64 go build -o schema-export.exe ./cmd/schema-export
 
-# macOS
-GOOS=darwin GOARCH=amd64 go build -o schema-export-darwin ./cmd/schema-export
+# macOS：在 Mac 上构建，保留达梦第三方加密插件能力
+make build-darwin
+# build/schema-export-darwin-amd64：Intel
+# build/schema-export-darwin-arm64：Apple Silicon
+
+# 从其他系统构建 macOS 便携版本，不支持达梦第三方加密插件
+make build-darwin-portable
+# build/schema-export-darwin-{amd64,arm64}-portable
 ```
+
+正式 macOS 发布在 Mac 上启用 CGO 构建。达梦第三方加密插件需要与程序匹配的系统、架构及 Go 工具链；普通数据库连接和 SQLite 不需要此插件。
 
 ## 使用方式
 
@@ -354,6 +371,8 @@ export EXPORT_INCLUDE_VIEWS=true
 
 如果输出文件已存在，会直接覆盖，不会自动备份。
 
+分文件导出会先检查本次对象的文件名：忽略大小写并进行 Unicode 规范化后相同的名称，以及表名与视图等对象后缀构成的重名，均会报错并停止写入。名称包含路径分隔符时也会报错。可以去掉 `--split` 使用合并导出；同名的已有文件不会在冲突检查失败时被覆盖。
+
 ## 重要说明
 
 ### 达梦 / Oracle 的 Schema
@@ -385,6 +404,10 @@ export EXPORT_INCLUDE_VIEWS=true
 ./schema-export export --type dm --dsn "dm://SYSDBA:password@localhost:5236?schema=SC"
 ./schema-export export --type oracle --dsn "oracle://user:password@localhost:1521/ORCL?schema=OTHER_SCHEMA"
 ```
+
+### macOS 上的达梦服务配置
+
+驱动在 macOS 上不自动读取 `/etc/dm_svc.conf`。需要服务名解析等配置时，请显式设置 `DM_SVC_PATH=/path/to/dm_svc.conf`，或在 DSN 中添加 `svcConfPath` 参数。普通主机和端口直连无需此配置。
 
 ## 数据库支持
 

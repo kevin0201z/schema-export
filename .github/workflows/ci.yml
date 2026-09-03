@@ -2,13 +2,16 @@ name: CI
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [main, master]
   pull_request:
-    branches: [ main, master ]
+    branches: [main, master]
   workflow_dispatch: {}
 
+permissions:
+  contents: read
+
 env:
-  GOLANGCI_LINT_VERSION: v1.64.8
+  GOLANGCI_LINT_VERSION: v2.13.2
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
@@ -16,128 +19,105 @@ jobs:
     name: Check formatting
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
-    - name: Set up Python for pre-commit
-      run: |
-        python3 -m pip install --upgrade pip
-        pip3 install --user pre-commit
-      shell: bash
-    - name: Set up Go for pre-commit
-      uses: actions/setup-go@v4
-      with:
-        go-version: '1.25'
-    - name: Install golangci-lint for pre-commit
-      env:
-        GOLANGCI_LINT_VERSION: v1.64.8
-      run: |
-        export PATH="$(go env GOPATH)/bin:$HOME/.local/bin:$PATH"
-        go install github.com/golangci/golangci-lint/cmd/golangci-lint@${GOLANGCI_LINT_VERSION}
-    - name: Run pre-commit
-      run: |
-        export PATH="$(go env GOPATH)/bin:$HOME/.local/bin:$PATH"
-        pre-commit run --all-files
-    - name: Set up Go
-      uses: actions/setup-go@v4
-      with:
-        go-version: '1.26'
-    - name: Check formatting
-      run: |
-        out=$(gofmt -s -l .)
-        if [ -n "$out" ]; then
-          echo "gofmt found files that need formatting:";
-          echo "$out";
-          exit 1;
-        fi
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+      - name: Check formatting
+        run: |
+          out=$(gofmt -s -l .)
+          if [ -n "$out" ]; then
+            echo "$out"
+            exit 1
+          fi
 
   vet:
     name: go vet
     runs-on: ubuntu-latest
-    needs: fmt
     steps:
-    - uses: actions/checkout@v4
-    - name: Set up Go
-      uses: actions/setup-go@v4
-      with:
-        go-version: '1.26'
-    - name: Run go vet
-      run: go vet ./...
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+      - run: go vet ./...
 
   lint:
     name: golangci-lint
     runs-on: ubuntu-latest
-    needs: vet
     steps:
-    - uses: actions/checkout@v4
-    - name: Set up Go
-      uses: actions/setup-go@v4
-      with:
-        go-version: '1.26'
-    - name: Restore golangci-lint cache
-      uses: actions/cache@v4
-      with:
-        path: |
-          ${{ runner.temp }}/golangci-cache
-          ${{ github.workspace }}/pkg/mod
-        key: ${{ runner.os }}-golangci-${{ hashFiles('**/go.sum') }}
-        restore-keys: |
-          ${{ runner.os }}-golangci-
-    - name: Install golangci-lint
-      env:
-        GOLANGCI_LINT_VERSION: v1.64.8
-      run: |
-        go install github.com/golangci/golangci-lint/cmd/golangci-lint@${GOLANGCI_LINT_VERSION}
-    - name: Run golangci-lint
-      env:
-        PATH: ${{ env.PATH }}:$(go env GOPATH)/bin
-      run: |
-        $(go env GOPATH)/bin/golangci-lint run --timeout 5m
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+      - name: Install golangci-lint
+        run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@${GOLANGCI_LINT_VERSION}
+      - name: Run golangci-lint
+        run: '"$(go env GOPATH)/bin/golangci-lint" run --timeout 5m'
 
   test:
-    name: Unit tests (matrix)
-    runs-on: ubuntu-latest
-    needs: lint
+    name: Tests (${{ matrix.os }}, Go ${{ matrix.go-version }})
+    runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
-        go-version: [1.25, 1.26]
+        os: [ubuntu-latest, macos-15-intel, macos-15]
+        go-version: ['1.25', '1.26']
     steps:
-    - uses: actions/checkout@v4
-    - name: Set up Go
-      uses: actions/setup-go@v4
-      with:
-        go-version: ${{ matrix.go-version }}
-    - name: Cache Go modules
-      uses: actions/cache@v4
-      with:
-        path: |
-          ~/.cache/go-build
-          ${{ github.workspace }}/pkg/mod
-        key: ${{ runner.os }}-go-${{ matrix.go-version }}-${{ hashFiles('**/go.sum') }}
-        restore-keys: |
-          ${{ runner.os }}-go-${{ matrix.go-version }}-
-    - name: Download dependencies
-      run: |
-        # prefer the Go proxy, fallback to direct
-        go env -w GOPROXY=https://proxy.golang.org,direct
-        go mod download
-    - name: Run tests (full)
-      run: |
-        # run all tests verbosely and disable test caching to ensure sqlmock expectations run fresh
-        go test ./... -v -count=1
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go-version }}
+      - run: go test ./... -count=1
 
   build:
-    name: Build artifacts
+    name: Build Linux and Windows
     runs-on: ubuntu-latest
-    needs: test
+    needs: [fmt, vet, lint, test]
     steps:
-    - uses: actions/checkout@v4
-    - name: Set up Go
-      uses: actions/setup-go@v4
-      with:
-        go-version: '1.26'
-    - name: Build
-      run: make build || true
-    - name: Upload artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: binaries
-        path: build/
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: make build build-linux build-windows
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-windows-binaries
+          path: build/
+          if-no-files-found: error
+
+  build-macos:
+    name: Build macOS (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    needs: [fmt, vet, lint, test]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-15-intel
+            arch: amd64
+          - os: macos-15
+            arch: arm64
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: make build build-darwin build-darwin-portable
+      - name: Check architecture, CGO and deployment target
+        run: |
+          sh scripts/check-macos-build.sh build/schema-export-darwin-amd64 amd64 1
+          sh scripts/check-macos-build.sh build/schema-export-darwin-arm64 arm64 1
+          sh scripts/check-macos-build.sh build/schema-export-darwin-amd64-portable amd64 0
+          sh scripts/check-macos-build.sh build/schema-export-darwin-arm64-portable arm64 0
+      - name: Run native binaries
+        env:
+          ARCH: ${{ matrix.arch }}
+        run: |
+          ./build/schema-export --version
+          ./build/schema-export-darwin-$ARCH --help
+          ./build/schema-export-darwin-$ARCH-portable --help
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-binaries-${{ matrix.arch }}
+          path: build/
+          if-no-files-found: error

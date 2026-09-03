@@ -18,6 +18,9 @@ func NewExporter() *Exporter {
 
 func (e *Exporter) Export(tables []model.Table, views []model.View, procedures []model.Procedure, functions []model.Function, triggers []model.Trigger, sequences []model.Sequence, options exporter.ExportOptions) error {
 	if options.SplitFiles {
+		if err := exporter.ValidateSplitFileNames(tables, views, procedures, functions, triggers, sequences, options); err != nil {
+			return err
+		}
 		return e.exportSplitFiles(tables, views, procedures, functions, triggers, sequences, options)
 	}
 	return e.exportSingleFile(tables, views, procedures, functions, triggers, sequences, options)

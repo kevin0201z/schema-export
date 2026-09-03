@@ -6,74 +6,66 @@ on:
       - 'v*'
 
 permissions:
-  contents: write
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
+  build:
+    name: Build release (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: build-linux build-windows
+          - os: macos-15
+            target: build-darwin
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: go test ./... -count=1
+      - name: Build
+        env:
+          VERSION: ${{ github.ref_name }}
+          TARGET: ${{ matrix.target }}
+        run: make $TARGET VERSION="$VERSION"
+      - name: Verify macOS binaries
+        if: runner.os == 'macOS'
+        run: |
+          sh scripts/check-macos-build.sh build/schema-export-darwin-amd64 amd64 1
+          sh scripts/check-macos-build.sh build/schema-export-darwin-arm64 arm64 1
+          ./build/schema-export-darwin-arm64 --version
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.os }}
+          path: build/schema-export-*
+          if-no-files-found: error
+
   release:
     runs-on: ubuntu-latest
-
+    needs: build
+    permissions:
+      contents: write
     steps:
-    - uses: actions/checkout@v4
-
-    - name: Set up Go
-      uses: actions/setup-go@v5
-      with:
-        go-version: '1.24'
-
-    - name: Get version
-      id: get_version
-      run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
-
-    - name: Build all platforms
-      run: make build-all VERSION=${{ steps.get_version.outputs.VERSION }}
-
-    - name: Create Release
-      id: create_release
-      uses: actions/create-release@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        tag_name: ${{ github.ref }}
-        release_name: Release ${{ github.ref }}
-        draft: false
-        prerelease: false
-
-    - name: Upload Linux binary
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./build/schema-export-linux-amd64
-        asset_name: schema-export-linux-amd64
-        asset_content_type: application/octet-stream
-
-    - name: Upload Windows binary
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./build/schema-export-windows-amd64.exe
-        asset_name: schema-export-windows-amd64.exe
-        asset_content_type: application/octet-stream
-
-    - name: Upload macOS AMD64 binary
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./build/schema-export-darwin-amd64
-        asset_name: schema-export-darwin-amd64
-        asset_content_type: application/octet-stream
-
-    - name: Upload macOS ARM64 binary
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./build/schema-export-darwin-arm64
-        asset_name: schema-export-darwin-arm64
-        asset_content_type: application/octet-stream
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          path: build
+          merge-multiple: true
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          VERSION: ${{ github.ref_name }}
+        run: |
+          gh release create "$VERSION" \
+            build/schema-export-linux-amd64 \
+            build/schema-export-windows-amd64.exe \
+            build/schema-export-darwin-amd64 \
+            build/schema-export-darwin-arm64 \
+            --verify-tag --title "Release $VERSION" --generate-notes
